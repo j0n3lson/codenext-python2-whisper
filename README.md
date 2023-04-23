@@ -57,9 +57,17 @@ workspace in a container.
 
 Launch your workspace in the container. Once inside, run the server like this:
 
-    python app/api.py
+    python server/api.py
 
-You should see a pop-up at the lower right directing you to opn the web server.
+You can use the REST end points using the `curl` utility:
+    
+    # Get an existing user 
+    curl http://localhost:5000/users/johnny
+
+    # Create a new user. Notice the `-X PUT` option. This tells curl to send an
+    # HTTP PUT request that, when, recieved tells the server to run the
+    # `Users.put()` route.
+    curl http://localhost:5000/users/johnny -X PUT
 
 ## API
 

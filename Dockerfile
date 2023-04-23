@@ -1,7 +1,7 @@
 FROM python:3.9
 
-WORKDIR /app
+WORKDIR /server
 
-COPY ./app /deploy/app
+COPY ./server /deploy/server
 
-RUN pip install --no-cache-dir --upgrade -r /deploy/app/requirements.txt
+RUN pip install --no-cache-dir --upgrade -r /deploy/server/requirements.txt
