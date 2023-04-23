@@ -4,12 +4,11 @@ import string
 from enum import Enum
 from datetime import datetime
 from flask import Flask
-from flask import request 
+from flask import request
 from flask_restful import abort
 from flask_restful import Api
 from flask_restful import Resource
 from flask_restful import reqparse
-
 
 
 # TODO(j0n3lson): Don't store the admin's API key in code. Take it as a flag
@@ -25,12 +24,15 @@ class GameStatus(Enum):
     WAITING_FOR_END = 2
     GAME_OVER = 3
 
+
 class UserType(Enum):
     REGULAR = 1
     ADMIN = 2
 
+
 class UserModel():
     '''A user in the system.'''
+
     def __init__(self, id, username, type, api_key):
         self.id = id
         self.username = username
@@ -48,25 +50,27 @@ class UserModel():
         }
         if include_api_key:
             # TODO: Figure why a string turns into a list when we assign it to
-            # the json object 
+            # the json object
             json['api_key'] = ''.join(self.api_key)
-            return json 
+            return json
         return json
-
 
 
 class UserManager():
     '''Manage users in the system'''
+
     def __init__(self):
-        self._user_map = dict({'admin': UserModel(id=0, username='admin', type=UserType.ADMIN, api_key=ADMIN_API_KEY)})
-        self._user_api_key_map = dict({'admin': ADMIN_API_KEY}) 
+        self._user_map = dict({'admin': UserModel(
+            id=0, username='admin', type=UserType.ADMIN, api_key=ADMIN_API_KEY)})
+        self._user_api_key_map = dict({'admin': ADMIN_API_KEY})
         self._next_id = 1
 
     def getUser(self, username):
         '''Returns the user or raise HTTPException if not found.'''
         user = self._user_map.get(username, None)
         if not user:
-            abort(404, message=f'User {username} does not exist. Did you /users/{username}')
+            abort(
+                404, message=f'User {username} does not exist. Did you /users/{username}')
         return user
 
     def addUser(self, username):
@@ -82,10 +86,46 @@ class UserManager():
         # Create new user
         api_key = random.choices(string.ascii_letters + string.digits, k=30)
         new_user = UserModel(id=self._next_id, username=username,
-                        type=UserType.REGULAR, api_key=api_key)
-        self._next_id+=1
+                             type=UserType.REGULAR, api_key=api_key)
+        self._next_id += 1
         self._user_map[username] = new_user
         return new_user
+
+    def checkUserIsAllowedOrRaise(self, username, api_key):
+        '''Check that username exist and is associated with the given key.'''
+        # Expect this to throw if user doesn't exist.
+        user = self.getUser(username)
+        if user.api_key != api_key:
+            abort(
+                403, f'Specified API key ({api_key}) does not match for {username}.')
+
+
+class GameManager():
+    '''Manages the game.'''
+
+    def __init__(self, user_manager):
+        self._game_status = GameStatus.NOT_STARTED
+
+        self._user_manager = user_manager
+        self._current_whisperer = self._user_manager.getUserById(id=1)
+        self._next_whisperer = self._user_manager.getUserById(id=2)
+
+    def getGameStatus(self):
+        '''Get the current game status.'''
+        return self._game_status
+
+    def getCurrentWhisperer(self):
+        '''Get the user who should whisper.'''
+        return self._current_whisperer
+
+    def getNextWhisperer(self):
+        '''Get the user who should shiper next.'''
+        return self._next_whisperer
+
+    def checkUserIsAllowedOrRaise(self, username, api_key):
+        '''Check if user is allowed or raise HTTPException'''
+        # Expect this to raise for invalid user.
+        self._user_manager.checkUserIsAllowedOrRaise(username, api_key)
 
 
 class UsersEndpoint(Resource):
@@ -96,7 +136,7 @@ class UsersEndpoint(Resource):
 
     def get(self, username):
         '''Get the user if they exist.'''
-        user =  self._user_manager.getUser(username)
+        user = self._user_manager.getUser(username)
 
         # IMPORTANT: We shouldn't leak the users API key after creation.
         return user.to_json(include_api_key=False)
@@ -117,14 +157,13 @@ class ListenEndpoint(Resource):
 
     def get(self, username):
         '''Listens for whispers sent to the user
-         
+
         The response indicates the username of the current whisperer and the
         next whisperer. If the given user is the current whisper, then the
         response indicates that they should go via the game status.
         '''
         api_key = self._getRequestParams().get('api_key')
-        if not self._game_manager.userIsAllowed(username, api_key):
-            abort(403, f'Sorry {username}, either you are not registered or your API key is invalid')
+        self._game_manager.checkUserIsAllowedOrRaise(username, api_key)
 
         game_status = self._game_manager.getGameStatus()
         current_whisperer = self._game_manager.getCurrentWhisperer()
@@ -138,7 +177,8 @@ class ListenEndpoint(Resource):
             abort(425, f'Too early. The game has not started yet.')
         elif game_status == GameStatus.WAITING_FOR_END:
             # It's not their turn but we're waiting for someone else to go.
-            abort(200, f'Everyone has gone except the last pair. Waiting for {current_whisperer} to whisper to {next_whisperer}.')
+            abort(
+                200, f'Everyone has gone except the last pair. Waiting for {current_whisperer} to whisper to {next_whisperer}.')
 
         if current_whisperer.username == username:
             # It's the user's turn, they should take it.
@@ -151,39 +191,21 @@ class ListenEndpoint(Resource):
 
     def _getRequestParams(self):
         parser = reqparse.RequestParser()
-        parser.add_argument('api_key', type=str, help='The api key for the user')
+        parser.add_argument('api_key', type=str,
+                            help='The api key for the user')
         return parser.parse_args(strict=True)
 
-class GameManager():
-    '''Manages the game.'''
-    def __init__(self, user_manager):
-        self._user_manager = user_manager
-        self._game_status = GameStatus.NOT_STARTED
 
-    def getGameStatus(self):
-        '''Get the current game status.'''
-        pass
-
-    def getCurrentWhisperer(self):
-        '''Get the user who should whisper.'''
-        pass
-
-    def getNextWhisperer(self):
-        '''Get the user who should shiper next.'''
-        pass
-
-    def userIsAllowed(self, username, api_key):
-        '''Check if user is allowed or raise HTTPException'''
-        pass
-
-# Game depdendencies 
+# Game depdendencies
 
 user_manager = UserManager()
 game_manager = GameManager(user_manager)
 
 # Setup routes
-api.add_resource(UsersEndpoint, '/users/<username>', resource_class_kwargs={'user_manager': UserManager()})
-api.add_resource(ListenEndpoint, '/play/listen/<username>', resource_class_kwargs={'game_manager': game_manager})
+api.add_resource(UsersEndpoint, '/users/<username>',
+                 resource_class_kwargs={'user_manager': UserManager()})
+api.add_resource(ListenEndpoint, '/play/listen/<username>',
+                 resource_class_kwargs={'game_manager': game_manager})
 
 
 if __name__ == '__main__':
