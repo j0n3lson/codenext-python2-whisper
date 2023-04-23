@@ -4,9 +4,12 @@ import string
 from enum import Enum
 from datetime import datetime
 from flask import Flask
+from flask import request 
 from flask_restful import abort
 from flask_restful import Api
 from flask_restful import Resource
+from flask_restful import reqparse
+
 
 
 # TODO(j0n3lson): Don't store the admin's API key in code. Take it as a flag
@@ -15,6 +18,7 @@ ADMIN_API_KEY = 'GVTu6CaxvzHQWFAn6eMi8TfVVq2BcK'
 
 app = Flask(__name__)
 api = Api(app)
+
 
 class GameStatus(Enum):
     NOT_STARTED = 1
@@ -108,17 +112,17 @@ class UsersEndpoint(Resource):
 class ListenEndpoint(Resource):
     '''Handles the /play/listen endpoint'''
 
-    def __init__(self, user_manager, game_manager):
-        self._user_manager = user_manager
+    def __init__(self, game_manager):
         self._game_manager = game_manager
 
-    def get(self, username, api_key):
+    def get(self, username):
         '''Listens for whispers sent to the user
          
         The response indicates the username of the current whisperer and the
         next whisperer. If the given user is the current whisper, then the
         response indicates that they should go via the game status.
         '''
+        api_key = self._getRequestParams().get('api_key')
         if not self._game_manager.userIsAllowed(username, api_key):
             abort(403, f'Sorry {username}, either you are not registered or your API key is invalid')
 
@@ -145,8 +149,19 @@ class ListenEndpoint(Resource):
                 'game_status': game_status.name
             }
 
+    def _getRequestParams(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('api_key', type=str, help='The api key for the user')
+        return parser.parse_args(strict=True)
 
+# Game depdendencies 
+
+user_manager = UserManager()
+game_manager = GameManager(user_manager)
+
+# Setup routes
 api.add_resource(UsersEndpoint, '/users/<username>', resource_class_kwargs={'user_manager': UserManager()})
+api.add_resource(ListenEndpoint, '/play/listen/<username>', resource_class_kwargs={'game_manager': game_manager})
 
 
 if __name__ == '__main__':
