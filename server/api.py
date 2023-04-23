@@ -21,7 +21,8 @@ api = Api(app)
 
 class GameStatus(Enum):
     NOT_STARTED = 1
-    WAITING_FOR_END = 2
+    GAME_STARTED = 2
+    WAITING_FOR_END = 3
     GAME_OVER = 3
 
 
@@ -60,10 +61,17 @@ class UserManager():
     '''Manage users in the system'''
 
     def __init__(self):
-        self._user_map = dict({'admin': UserModel(
-            id=0, username='admin', type=UserType.ADMIN, api_key=ADMIN_API_KEY)})
-        self._user_api_key_map = dict({'admin': ADMIN_API_KEY})
-        self._next_id = 1
+        # A map of username to UserModel object.
+        self._user_map = dict()
+
+        # A map of api key to UserModel object.
+        self._user_api_key_map = dict()
+
+        # A map of user ID to UserModel Object.
+        self._user_id_map = dict()
+
+        self._next_id = 0
+        self.addUser('admin', api_key=ADMIN_API_KEY)
 
     def getUser(self, username):
         '''Returns the user or raise HTTPException if not found.'''
@@ -73,22 +81,32 @@ class UserManager():
                 404, message=f'User {username} does not exist. Did you /users/{username}')
         return user
 
-    def addUser(self, username):
+    def getUserById(self, id):
+        '''Returns the user with given id or raise.'''
+        user = self._user_id_map.get(id, None)
+        if not user:
+            abort(
+                404, message=f'No user with id={id} found. Did you /users/<username>')
+        return user
+
+    def addUser(self, username, api_key=None):
         '''Creates new user and returns it.'''
         user = self._user_map.get(username, None)
-        print(f'user: {user}')
-        print(f'all_users: {self._user_map}')
         if user:
             created_on = user.created_on.strftime(
                 '%m/%d/%Y %H:%M:%S')
             abort(409, message=f'User {username} was created on {created_on}')
 
         # Create new user
-        api_key = random.choices(string.ascii_letters + string.digits, k=30)
+        if not api_key:
+            api_key = random.choices(
+                string.ascii_letters + string.digits, k=30)
         new_user = UserModel(id=self._next_id, username=username,
                              type=UserType.REGULAR, api_key=api_key)
         self._next_id += 1
         self._user_map[username] = new_user
+        self._user_api_key_map[new_user.api_key] = new_user
+        self._user_id_map[new_user.id] = new_user
         return new_user
 
     def checkUserIsAllowedOrRaise(self, username, api_key):
@@ -107,8 +125,25 @@ class GameManager():
         self._game_status = GameStatus.NOT_STARTED
 
         self._user_manager = user_manager
-        self._current_whisperer = self._user_manager.getUserById(id=1)
-        self._next_whisperer = self._user_manager.getUserById(id=2)
+        # Note: These get updated once the game starts.
+        self._current_whisperer = None
+        self._next_whisperer = None
+
+    # TODO: Move to WhisperEndpoint.post()
+    def whisper(self, username, api_key):
+        self.checkUserIsAllowedOrRaise(username, api_key)
+        user = self._user_manager.getUser(username)
+
+        if self._game_status == GameStatus.NOT_STARTED:
+            if user.id != 1:
+                # We're begining the game, the user should be the user with the
+                # lowest ID.
+                expected_whisperer = self._user_manager.getUserById(id=1)
+                abort(
+                    403, 'Game is starting, expecting whisperer to be {expected_whisperer.username}')
+            if user.id == 1:
+                self._game_status = GameStatus.GAME_STARTED
+                # TODO: Record the message
 
     def getGameStatus(self):
         '''Get the current game status.'''
@@ -122,6 +157,7 @@ class GameManager():
         '''Get the user who should shiper next.'''
         return self._next_whisperer
 
+    # TODO: Move to WhisperEndpoint
     def checkUserIsAllowedOrRaise(self, username, api_key):
         '''Check if user is allowed or raise HTTPException'''
         # Expect this to raise for invalid user.
