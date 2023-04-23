@@ -53,6 +53,14 @@ which contains an extension that initiates the container dev workflow when a
 You're all set! When you open your workspace it will suggest that you reopen the
 workspace in a container.
 
+## Running the Server
+
+Launch your workspace in the container. Once inside, run the server like this:
+
+    python app/api.py
+
+You should see a pop-up at the lower right directing you to opn the web server.
+
 ## API
 
 The service has the following APIs implemented:
