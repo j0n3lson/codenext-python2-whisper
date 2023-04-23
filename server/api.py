@@ -9,6 +9,8 @@ from flask_restful import Api
 from flask_restful import Resource
 
 
+# TODO(j0n3lson): Don't store the admin's API key in code. Take it as a flag
+# saved in a github key.
 ADMIN_API_KEY = 'GVTu6CaxvzHQWFAn6eMi8TfVVq2BcK'
 
 app = Flask(__name__)
@@ -20,9 +22,8 @@ class UserType(Enum):
     ADMIN = 2
 
 
-class User():
+class UserModel():
     '''A user in the system.'''
-
     def __init__(self, id, username, type, api_key):
         self.id = id
         self.username = username
@@ -46,66 +47,62 @@ class User():
         return json
 
 
-# TODO(j0n3lson): Don't store the admin's API key in code. Take it as a flag
-# saved in a github key.
 
-# TODO: Move these to UserManager
-api_keys = {
-    'admin': ADMIN_API_KEY
-}
+class UserManager():
+    '''Manage users in the system'''
+    def __init__(self):
+        self._user_map = dict({'admin': UserModel(id=0, username='admin', type=UserType.ADMIN, api_key=ADMIN_API_KEY)})
+        self._user_api_key_map = dict({'admin': ADMIN_API_KEY}) 
+        self._next_id = 1
 
-users = {
-    'admin': User(id=0, username='admin', type=UserType.ADMIN, api_key=ADMIN_API_KEY)
-}
+    def getUser(self, username):
+        '''Returns the user or raise HTTPException if not found.'''
+        user = self._user_map.get(username, None)
+        if not user:
+            abort(404, message=f'User {username} does not exist. Did you /users/{username}')
+        return user
+
+    def addUser(self, username):
+        '''Creates new user and returns it.'''
+        user = self._user_map.get(username, None)
+        print(f'user: {user}')
+        print(f'all_users: {self._user_map}')
+        if user:
+            created_on = user.created_on.strftime(
+                '%m/%d/%Y %H:%M:%S')
+            abort(409, message=f'User {username} was created on {created_on}')
+
+        # Create new user
+        api_key = random.choices(string.ascii_letters + string.digits, k=30)
+        new_user = UserModel(id=self._next_id, username=username,
+                        type=UserType.REGULAR, api_key=api_key)
+        self._next_id+=1
+        self._user_map[username] = new_user
+        return new_user
 
 
-class Users(Resource):
+class UsersResource(Resource):
+
+    def __init__(self, user_manager):
+        self._user_manager = user_manager
 
     def get(self, username):
-        '''Get the user if they exist'''
-        self._abort_if_not_exists(username)
-        user = users.get(username)
+        '''Get the user if they exist.'''
+        user =  self._user_manager.getUser(username)
+
         # IMPORTANT: We shouldn't leak the users API key after creation.
         return user.to_json(include_api_key=False)
 
     def put(self, username):
         '''Creates a new user if one doesn't already exist'''
-        if username in users:
-            user = users.get(username)
-            created_on = user.created_on.strftime(
-                '%m/%d/%Y %H:%M:%S')
-            abort(409, message=f'User {username} was created on {created_on}')
-        user = self._create_new_user(username)
+        user = self._user_manager.addUser(username)
+
         # IMPORTANT: It is okay to tell a user their API key once we created it.
         return user.to_json(include_api_key=True)
 
-    def _create_new_user(self, username):
-        # TODO: Move this this to UserManager
-        api_key = self._generate_api_key()
-        id = self._get_next_id()
-        new_user = User(id=id, username=username,
-                        type=UserType.REGULAR, api_key=api_key)
-        users[username] = new_user
-        return new_user
 
-    def _generate_api_key(self):
-        # TODO: Move this this to UserManager
-        return random.choices(string.ascii_letters + string.digits, k=30)
+api.add_resource(UsersResource, '/users/<username>', resource_class_kwargs={'user_manager': UserManager()})
 
-    def _get_next_id(self):
-        '''Returns the next available ID'''
-        # TODO: Move this this to UserManager and track next ID when users are
-        # created.
-        current_users = list(users.values())
-        current_users.sort(reverse=True, key=lambda user: user.id)
-        return current_users[0].id + 1
-
-    def _abort_if_not_exists(self, username):
-        if username not in users:
-            abort(404, message=f'User {username} does not exist')
-
-
-api.add_resource(Users, '/users/<username>')
 
 if __name__ == '__main__':
     app.run(debug=True)
