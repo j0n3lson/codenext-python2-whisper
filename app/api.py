@@ -15,12 +15,9 @@ app = Flask(__name__)
 api = Api(app)
 
 
-class UserType(str, Enum):
+class UserType(Enum):
     REGULAR = 1
     ADMIN = 2
-
-    def __str__(self) -> str:
-        return self.value
 
 
 class User():
@@ -33,14 +30,20 @@ class User():
         self.created_on = datetime.now()
         self.api_key = api_key
 
-    def to_json(self):
+    def to_json(self, include_api_key=False):
         '''Returns a JSON serializable object representing the user.'''
-        return {
+        json = {
             'id': self.id,
             'user': self.username,
-            'type': self.type,
+            'type': self.type.name,
             'created_on': self.created_on.strftime('%m/%d/%Y %H:%M:%S')
         }
+        if include_api_key:
+            # TODO: Figure why a string turns into a list when we assign it to
+            # the json object 
+            json['api_key'] = ''.join(self.api_key)
+            return json 
+        return json
 
 
 # TODO(j0n3lson): Don't store the admin's API key in code. Take it as a flag
@@ -62,7 +65,8 @@ class Users(Resource):
         '''Get the user if they exist'''
         self._abort_if_not_exists(username)
         user = users.get(username)
-        return user.to_json()
+        # IMPORTANT: We shouldn't leak the users API key after creation.
+        return user.to_json(include_api_key=False)
 
     def put(self, username):
         '''Creates a new user if one doesn't already exist'''
@@ -72,7 +76,8 @@ class Users(Resource):
                 '%m/%d/%Y %H:%M:%S')
             abort(409, message=f'User {username} was created on {created_on}')
         user = self._create_new_user(username)
-        return user.to_json()
+        # IMPORTANT: It is okay to tell a user their API key once we created it.
+        return user.to_json(include_api_key=True)
 
     def _create_new_user(self, username):
         # TODO: Move this this to UserManager
