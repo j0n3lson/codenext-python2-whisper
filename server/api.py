@@ -16,11 +16,14 @@ ADMIN_API_KEY = 'GVTu6CaxvzHQWFAn6eMi8TfVVq2BcK'
 app = Flask(__name__)
 api = Api(app)
 
+class GameStatus(Enum):
+    NOT_STARTED = 1
+    WAITING_FOR_END = 2
+    GAME_OVER = 3
 
 class UserType(Enum):
     REGULAR = 1
     ADMIN = 2
-
 
 class UserModel():
     '''A user in the system.'''
@@ -81,7 +84,8 @@ class UserManager():
         return new_user
 
 
-class UsersResource(Resource):
+class UsersEndpoint(Resource):
+    '''Handles the /users/ endpoint'''
 
     def __init__(self, user_manager):
         self._user_manager = user_manager
@@ -101,7 +105,48 @@ class UsersResource(Resource):
         return user.to_json(include_api_key=True)
 
 
-api.add_resource(UsersResource, '/users/<username>', resource_class_kwargs={'user_manager': UserManager()})
+class ListenEndpoint(Resource):
+    '''Handles the /play/listen endpoint'''
+
+    def __init__(self, user_manager, game_manager):
+        self._user_manager = user_manager
+        self._game_manager = game_manager
+
+    def get(self, username, api_key):
+        '''Listens for whispers sent to the user
+         
+        The response indicates the username of the current whisperer and the
+        next whisperer. If the given user is the current whisper, then the
+        response indicates that they should go via the game status.
+        '''
+        if not self._game_manager.userIsAllowed(username, api_key):
+            abort(403, f'Sorry {username}, either you are not registered or your API key is invalid')
+
+        game_status = self._game_manager.getGameStatus()
+        current_whisperer = self._game_manager.getCurrentWhisperer()
+        next_whisperer = self._game_manager.getNextWhisperer()
+
+        if game_status == GameStatus.GAME_OVER:
+            # The game already ended.
+            abort(410, f'Too late, the game has already ended.')
+        elif game_status == GameStatus.NOT_STARTED:
+            # The first person hasn't gone.
+            abort(425, f'Too early. The game has not started yet.')
+        elif game_status == GameStatus.WAITING_FOR_END:
+            # It's not their turn but we're waiting for someone else to go.
+            abort(200, f'Everyone has gone except the last pair. Waiting for {current_whisperer} to whisper to {next_whisperer}.')
+
+        if current_whisperer.username == username:
+            # It's the user's turn, they should take it.
+            return {
+                'message': f'Hey {username}, it\'s your turn to whisper to {next_whisperer}',
+                'current_whisper': username,
+                'next_whisper': next_whisperer,
+                'game_status': game_status.name
+            }
+
+
+api.add_resource(UsersEndpoint, '/users/<username>', resource_class_kwargs={'user_manager': UserManager()})
 
 
 if __name__ == '__main__':
