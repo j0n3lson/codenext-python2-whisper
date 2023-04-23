@@ -66,7 +66,7 @@ You should see a pop-up at the lower right directing you to opn the web server.
 The service has the following APIs implemented:
 
 ## Open to all
-- `/register/user/{username}`: Registers the given `{username}`. This should be
+- `/users/register/{username}`: Registers the given `{username}`. This should be
 the first thing a client calls. When called, this API registers a user and
 returns a unique API key. The API key is associated with the user's ID.  -
 `/play/listen/{api_key}`: `API KEY REQUIRED`. Let's a user check for a message.
