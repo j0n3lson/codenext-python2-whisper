@@ -154,6 +154,28 @@ class ListenEndpoint(Resource):
         parser.add_argument('api_key', type=str, help='The api key for the user')
         return parser.parse_args(strict=True)
 
+class GameManager():
+    '''Manages the game.'''
+    def __init__(self, user_manager):
+        self._user_manager = user_manager
+        self._game_status = GameStatus.NOT_STARTED
+
+    def getGameStatus(self):
+        '''Get the current game status.'''
+        pass
+
+    def getCurrentWhisperer(self):
+        '''Get the user who should whisper.'''
+        pass
+
+    def getNextWhisperer(self):
+        '''Get the user who should shiper next.'''
+        pass
+
+    def userIsAllowed(self, username, api_key):
+        '''Check if user is allowed or raise HTTPException'''
+        pass
+
 # Game depdendencies 
 
 user_manager = UserManager()
