@@ -163,6 +163,7 @@ class GameManager():
         # Expect this to raise for invalid user.
         self._user_manager.checkUserIsAllowedOrRaise(username, api_key)
 
+
 class Users(Resource):
     '''Handles the /users/ endpoint'''
 
@@ -184,7 +185,41 @@ class Users(Resource):
         return user.to_json(include_api_key=True)
 
 
-class ListenEndpoint(Resource):
+class Whisper(Resource):
+    '''Handles the /play/whisper endpoint.'''
+
+    def __init__(self, game_manager):
+        self._game_manager = game_manager
+
+    def put(self, username):
+        '''Send a message to a given user'''
+        params = self._getRequestParams()
+        api_key = params['api_key']
+        from_user = username
+        to_user = params['to_user']
+        message = params['message']
+
+        # Validate User
+
+        # Check if we're in the right state
+        #   - Is the game in GAME_AWAIT_FINISH, GAME_FINISHED?
+        #   - Are there a minimum number of registered users?
+
+        # Whisper: Add a Whisper {message, from_user, to_user} to the model
+
+        # Reply
+
+
+    def _getRequestParams(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('api_key', type=str,
+                            help='The api key for the user')
+        return parser.parse_args(strict=True)
+
+        pass
+
+
+class Listen(Resource):
     '''Handles the /play/listen endpoint'''
 
     def __init__(self, game_manager):
@@ -239,7 +274,9 @@ game_manager = GameManager(user_manager)
 # Setup routes
 api.add_resource(Users, '/users/<username>',
                  resource_class_kwargs={'user_manager': UserManager()})
-api.add_resource(ListenEndpoint, '/play/listen/<username>',
+api.add_resource(Listen, '/play/listen/<username>',
+                 resource_class_kwargs={'game_manager': game_manager})
+api.add_resource(Whisper, '/play/whisper/<username>',
                  resource_class_kwargs={'game_manager': game_manager})
 
 
