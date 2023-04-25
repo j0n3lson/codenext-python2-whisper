@@ -200,15 +200,27 @@ class Whisper(Resource):
         message = params['message']
 
         # Validate User
+        self._game_manager.checkUserIsAllowedOrRaise(from_user, api_key)
 
         # Check if we're in the right state
         #   - Is the game in GAME_AWAIT_FINISH, GAME_FINISHED?
+        current_state = self._game_manager.getGameStatus()
+        if current_state == GameState.GAME_FINISHED:
+            abort(
+                403, f'State: {current_state}. Game has finished. You should start listening for the next game to start.')
+        elif current_state == GameState.GAME_AWAIT_FINISH:
+            abort(
+                403, f'State: {current_state}. You cannot whisper now, we are waiting for the last whisper.')
+
         #   - Are there a minimum number of registered users?
+        elif current_state in [GameState.GAME_STARTED, GameState.GAME_AWAIT_START]:
+            # If this is the first Whisperer, then we should move to GAME_STARTED.
+            if self._game_manager.getCurrentWhisperer() == None:
+                self._game_manager.setGameState(GameState.GAME_AWAIT_START)
 
         # Whisper: Add a Whisper {message, from_user, to_user} to the model
 
         # Reply
-
 
     def _getRequestParams(self):
         parser = reqparse.RequestParser()
