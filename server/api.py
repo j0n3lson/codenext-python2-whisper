@@ -163,8 +163,7 @@ class GameManager():
         # Expect this to raise for invalid user.
         self._user_manager.checkUserIsAllowedOrRaise(username, api_key)
 
-
-class UsersEndpoint(Resource):
+class Users(Resource):
     '''Handles the /users/ endpoint'''
 
     def __init__(self, user_manager):
@@ -238,7 +237,7 @@ user_manager = UserManager()
 game_manager = GameManager(user_manager)
 
 # Setup routes
-api.add_resource(UsersEndpoint, '/users/<username>',
+api.add_resource(Users, '/users/<username>',
                  resource_class_kwargs={'user_manager': UserManager()})
 api.add_resource(ListenEndpoint, '/play/listen/<username>',
                  resource_class_kwargs={'game_manager': game_manager})
