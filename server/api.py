@@ -9,6 +9,14 @@ from flask_restful import abort
 from flask_restful import Api
 from flask_restful import Resource
 from flask_restful import reqparse
+from typing import Dict, Tuple, Type
+
+
+# The JSON object sent to clients. 
+UserMessageApiResponse = Dict[str, str]
+UserModelApiResponse = Dict[str, str]
+WhisperPutApiResponse = Dict[str, str]
+
 
 
 # TODO(j0n3lson): Don't store the admin's API key in code. Take it as a flag
@@ -34,14 +42,14 @@ class UserType(Enum):
 class UserModel():
     '''A user in the system.'''
 
-    def __init__(self, id, username, type, api_key):
+    def __init__(self, id: int, username: str, type: UserType, api_key: str):
         self.id = id
         self.username = username
         self.type = type
         self.created_on = datetime.now()
         self.api_key = api_key
 
-    def toJson(self, include_api_key=False):
+    def toJson(self, include_api_key=False) -> UserModelApiResponse:
         '''Returns a JSON serializable object representing the user.'''
         json = {
             'id': self.id,
@@ -62,18 +70,18 @@ class UserManager():
 
     def __init__(self):
         # A map of username to UserModel object.
-        self._user_map = dict()
+        self._user_map: Dict[str, UserModel] = dict()
 
         # A map of api key to UserModel object.
-        self._user_api_key_map = dict()
+        self._user_api_key_map: Dict[str, UserModel] = dict()
 
         # A map of user ID to UserModel Object.
-        self._user_id_map = dict()
+        self._user_id_map: Dict[int, UserModel] = dict()
 
         self._next_id = 1
         self.addUser('admin', api_key=ADMIN_API_KEY)
 
-    def getUserByName(self, username):
+    def getUserByName(self, username: str) -> UserModel:
         '''Returns the user or raise HTTPException if not found.'''
         user = self._user_map.get(username, None)
         if not user:
@@ -81,7 +89,7 @@ class UserManager():
                 404, message=f'User {username} does not exist. Did you /users/{username}')
         return user
 
-    def getUserById(self, id):
+    def getUserById(self, id: int) -> UserModel:
         '''Returns the user with given id or raise.'''
         user = self._user_id_map.get(id, None)
         if not user:
@@ -89,7 +97,7 @@ class UserManager():
                 404, message=f'No user with id={id} found. Did you /users/<username>')
         return user
 
-    def addUser(self, username, api_key=None):
+    def addUser(self, username:str, api_key:str=None) -> UserModel:
         '''Creates new user and returns it.'''
         user = self._user_map.get(username, None)
         if user:
@@ -109,10 +117,10 @@ class UserManager():
         self._user_id_map[new_user.id] = new_user
         return new_user
 
-    def getUsersCount(self):
+    def getUsersCount(self) -> int:
         return len(self._user_map)
 
-    def isAuthorizedOrAbort(self, username, api_key):
+    def isAuthorizedOrAbort(self, username, api_key) -> None:
         '''Check that username exist and is associated with the given key.'''
         # Expect this to throw if user doesn't exist.
         user = self.getUserByName(username)
@@ -124,82 +132,85 @@ class UserManager():
 class GameManager():
     '''Manages the game.'''
 
-    def __init__(self, user_manager):
+    def __init__(self, user_manager: UserManager):
         self._game_status = GameStatus.GAME_NOT_STARTED
 
         self._user_manager = user_manager
-        # Note: These get updated once the game starts.
         self._current_player_id = 1
         self._next_player_id = 2
+        self._messages: Dict[str, UserMessageApiResponse] 
 
-    def getGameStatus(self):
+    def getGameStatus(self) -> GameStatus:
         '''Get the current game status.'''
         return self._game_status
 
-    def setGameStatus(self, status):
+    def setGameStatus(self, status:GameStatus) -> None:
         self._game_status = status
 
-    def getCurrentPlayerId(self):
+    def getCurrentPlayerId(self) -> int:
         '''Get the id of the user who should whisper now.'''
         return self._current_player_id
 
-    def getCurrentPlayer(self):
+    def setCurrentPlayerId(self, id:int)-> None:
+        self._current_player_id = id
+
+    def getCurrentPlayer(self) -> UserModel:
         '''Like getCurrentPlayer() but returns the whole user object.'''
         return self._user_manager.getUserById(self._current_player_id)
 
-    def setNextPlayerId(self, id):
+    def setNextPlayerId(self, id: int) -> None:
         self._current_player_id = id
 
-    def getNextPlayerId(self):
+    def getNextPlayerId(self) -> int:
         '''Get the id of the user who should whisper next.'''
         return self._next_player_id
 
-    def getNextPlayer(self):
+    def getNextPlayer(self) -> UserModel:
         '''Like getNextPlayerId() but returns the whole user object.'''
         return self._user_manager.getUserById(self._next_player_id)
 
-    def setNextPlayerId(self, id):
+    def setNextPlayerId(self, id:int) -> None:
         self._next_player_id = id
 
-    def getPlayerCount(self):
+    def getPlayerCount(self) -> int:
         return self._user_manager.getUsersCount()
 
-    def getPlayerByName(self, username):
+    def getPlayerByName(self, username:str) -> UserModel:
         return self._user_manager.getUserByName(username)
 
-    def getMessageForUser(self, username):
+    def getMessageForUser(self, username:str) -> UserMessageApiResponse:
         if username not in self._messages:
             abort(404, f'No messages for {username}')
         return self._messages[username]
 
-    def setMessageForUser(self, from_username, to_username, message):
+    def setMessageForUser(self, from_username:str, to_username:str, message:str):
         if to_username in self._messages:
             abort(403, f'User {to_username} has already gotten a message.')
         self._messages[to_username] = {
             'from_user': from_username,
             'message': message
-            }
+        }
 
-    def isAuthorizedOrAbort(self, username, api_key):
+    def isAuthorizedOrAbort(self, username:str, api_key:str):
         '''Check if user is allowed or raise HTTPException'''
         # Expect this to raise for invalid user.
         self._user_manager.isAuthorizedOrAbort(username, api_key)
 
 
 class Users(Resource):
-    '''Handles the /users/ endpoint'''
+    '''Handles the /users endpoint'''
 
-    def __init__(self, user_manager):
+    def __init__(self, user_manager: UserManager):
         self._user_manager = user_manager
 
-    def get(self, username):
+    def get(self, username) -> UserModelApiResponse:
         '''Get the user if they exist.'''
-        user = self._user_manager.getUser(username)
+        user = self._user_manager.getUserByName(username)
 
         # IMPORTANT: We shouldn't leak the users API key after creation.
         return user.to_json(include_api_key=False)
 
-    def put(self, username):
+    def put(self, username: str) -> UserModelApiResponse:
         '''Creates a new user if one doesn't already exist'''
         user = self._user_manager.addUser(username)
 
@@ -210,10 +221,10 @@ class Users(Resource):
 class Whisper(Resource):
     '''Handles the /play/whisper endpoint.'''
 
-    def __init__(self, game_manager):
+    def __init__(self, game_manager: GameManager):
         self._game_manager = game_manager
 
-    def put(self, username):
+    def put(self, username: str) -> WhisperPutApiResponse:
         '''Send a message to a given user'''
         params = self._getRequestParams()
         api_key = params['api_key']
@@ -225,7 +236,7 @@ class Whisper(Resource):
         self._game_manager.isAuthorizedOrAbort(from_username, api_key)
 
         # Check if it's okay to play right now.
-        self._canWhisperOrAbort(from_username)
+        self._canWhisperOrAbort()
 
         # Get the next two players to go.
         from_user, to_user = self._getPlayersOrAbort(
@@ -238,7 +249,8 @@ class Whisper(Resource):
             self._game_manager.setGameStatus(GameStatus.GAME_STARTED)
 
         # Whisper: Add a Whisper {message, from_user, to_user} to the model
-        self._game_manager.setMessageForUser(from_user.username, to_user.username, message)
+        self._game_manager.setMessageForUser(
+            from_user.username, to_user.username, message)
         self._game_manager.setCurrentPlayerId(to_user.id)
         self._game_manager.setNextPlayerId(to_user.id + 1)
 
@@ -256,7 +268,7 @@ class Whisper(Resource):
             'game_status': self._game_manager.getGameStatus().name
         }
 
-    def _canWhisperOrAbort(self, from_username):
+    def _canWhisperOrAbort(self) -> None:
         '''Check if we should start or abort'''
         # Are we in the right state?
         current_state = self._game_manager.getGameStatus()
@@ -270,7 +282,7 @@ class Whisper(Resource):
             abort(
                 403, f'There are not enough players. Need 3, have {player_count} players registered.')
 
-    def _getPlayersOrAbort(self, from_username, to_username):
+    def _getPlayersOrAbort(self, from_username, to_username) -> Tuple[UserModel]:
         '''Checks that the user can whisper to the other user or aborts.'''
         from_user = self._game_manager.getPlayerByName(from_username)
         if from_user.id != self._game_manager.getCurrentPlayerId():
@@ -282,7 +294,8 @@ class Whisper(Resource):
 
         return from_user, to_user
 
-    def _getRequestParams(self):
+    def _getRequestParams(self) -> Type[reqparse.Namespace]:
+        # TODO: Not sure if this return pytype annotation is correct.
         parser = reqparse.RequestParser()
         parser.add_argument('api_key', type=str,
                             help='The api key for the user')
@@ -297,10 +310,10 @@ class Whisper(Resource):
 class Listen(Resource):
     '''Handles the /play/listen endpoint'''
 
-    def __init__(self, game_manager):
+    def __init__(self, game_manager: GameManager):
         self._game_manager = game_manager
 
-    def get(self, username):
+    def get(self, username:str) -> UserMessageApiResponse:
         '''Listens for whispers sent to the user
 
         The response indicates the username of the current whisperer and the
@@ -331,7 +344,8 @@ class Listen(Resource):
             }
         return self._game_manager.getMessageForUser(username)
 
-    def _getRequestParams(self):
+    def _getRequestParams(self) -> Type[reqparse.Namespace]:
+        # TODO: Not sure if this return pytype annotation is correct.
         parser = reqparse.RequestParser()
         parser.add_argument('api_key', type=str,
                             help='The api key for the user')
