@@ -1,30 +1,27 @@
 import random
 import string
+import datetime
 
 from enum import Enum
-from datetime import datetime
 from flask import Flask
-from flask import request
 from flask_restful import abort
 from flask_restful import Api
 from flask_restful import Resource
 from flask_restful import reqparse
+from http import HTTPStatus
 from typing import Dict, Tuple, Type
 
 
-# The JSON object sent to clients. 
+# The JSON object sent to clients.
 UserMessageApiResponse = Dict[str, str]
 UserModelApiResponse = Dict[str, str]
 WhisperPutApiResponse = Dict[str, str]
 
 
-
 # TODO(j0n3lson): Don't store the admin's API key in code. Take it as a flag
 # saved in a github key.
 ADMIN_API_KEY = 'GVTu6CaxvzHQWFAn6eMi8TfVVq2BcK'
-
-app = Flask(__name__)
-api = Api(app)
+ADMIN_USERNAME = 'admin'
 
 
 class GameStatus(Enum):
@@ -46,11 +43,12 @@ class UserModel():
         self.id = id
         self.username = username
         self.type = type
-        self.created_on = datetime.now()
+        self.created_on = datetime.datetime.now()
         self.api_key = api_key
 
     def toJson(self, include_api_key=False) -> UserModelApiResponse:
         '''Returns a JSON serializable object representing the user.'''
+        # TODO: Use flask.jsonify here: https://www.fullstackpython.com/flask-json-jsonify-examples.html
         json = {
             'id': self.id,
             'user': self.username,
@@ -58,9 +56,7 @@ class UserModel():
             'created_on': self.created_on.strftime('%m/%d/%Y %H:%M:%S')
         }
         if include_api_key:
-            # TODO: Figure why a string turns into a list when we assign it to
-            # the json object
-            json['api_key'] = ''.join(self.api_key)
+            json['api_key'] = self.api_key
             return json
         return json
 
@@ -78,15 +74,16 @@ class UserManager():
         # A map of user ID to UserModel Object.
         self._user_id_map: Dict[int, UserModel] = dict()
 
-        self._next_id = 1
-        self.addUser('admin', api_key=ADMIN_API_KEY)
+        self._next_id = 0
+        self.addUser(ADMIN_USERNAME, user_type=UserType.ADMIN,
+                     api_key=ADMIN_API_KEY)
 
     def getUserByName(self, username: str) -> UserModel:
         '''Returns the user or raise HTTPException if not found.'''
         user = self._user_map.get(username, None)
         if not user:
             abort(
-                404, message=f'User {username} does not exist. Did you /users/{username}')
+                HTTPStatus.NOT_FOUND, message=f'User {username} does not exist. Did you /users/{username}')
         return user
 
     def getUserById(self, id: int) -> UserModel:
@@ -94,23 +91,24 @@ class UserManager():
         user = self._user_id_map.get(id, None)
         if not user:
             abort(
-                404, message=f'No user with id={id} found. Did you /users/<username>')
+                HTTPStatus.NOT_FOUND, message=f'No user with id={id} found. Did you /users/<username>')
         return user
 
-    def addUser(self, username:str, api_key:str=None) -> UserModel:
+    def addUser(self, username: str, user_type: UserType = UserType.REGULAR, api_key: str = None) -> UserModel:
         '''Creates new user and returns it.'''
         user = self._user_map.get(username, None)
         if user:
             created_on = user.created_on.strftime(
                 '%m/%d/%Y %H:%M:%S')
-            abort(409, message=f'User {username} was created on {created_on}')
+            abort(HTTPStatus.CONFLICT,
+                  message=f'User {username} was created on {created_on}')
 
         # Create new user
         if not api_key:
-            api_key = random.choices(
-                string.ascii_letters + string.digits, k=30)
+            api_key = ''.join(random.choices(
+                string.ascii_letters + string.digits, k=30))
         new_user = UserModel(id=self._next_id, username=username,
-                             type=UserType.REGULAR, api_key=api_key)
+                             type=user_type, api_key=api_key)
         self._next_id += 1
         self._user_map[username] = new_user
         self._user_api_key_map[new_user.api_key] = new_user
@@ -126,7 +124,7 @@ class UserManager():
         user = self.getUserByName(username)
         if user.api_key != api_key:
             abort(
-                403, f'Specified API key ({api_key}) does not match for {username}.')
+                HTTPStatus.FORBIDDEN, f'Specified API key ({api_key}) does not match for {username}.')
 
 
 class GameManager():
@@ -138,20 +136,20 @@ class GameManager():
         self._user_manager = user_manager
         self._current_player_id = 1
         self._next_player_id = 2
-        self._messages: Dict[str, UserMessageApiResponse] 
+        self._messages: Dict[str, UserMessageApiResponse]
 
     def getGameStatus(self) -> GameStatus:
         '''Get the current game status.'''
         return self._game_status
 
-    def setGameStatus(self, status:GameStatus) -> None:
+    def setGameStatus(self, status: GameStatus) -> None:
         self._game_status = status
 
     def getCurrentPlayerId(self) -> int:
         '''Get the id of the user who should whisper now.'''
         return self._current_player_id
 
-    def setCurrentPlayerId(self, id:int)-> None:
+    def setCurrentPlayerId(self, id: int) -> None:
         self._current_player_id = id
 
     def getCurrentPlayer(self) -> UserModel:
@@ -169,29 +167,30 @@ class GameManager():
         '''Like getNextPlayerId() but returns the whole user object.'''
         return self._user_manager.getUserById(self._next_player_id)
 
-    def setNextPlayerId(self, id:int) -> None:
+    def setNextPlayerId(self, id: int) -> None:
         self._next_player_id = id
 
     def getPlayerCount(self) -> int:
         return self._user_manager.getUsersCount()
 
-    def getPlayerByName(self, username:str) -> UserModel:
+    def getPlayerByName(self, username: str) -> UserModel:
         return self._user_manager.getUserByName(username)
 
-    def getMessageForUser(self, username:str) -> UserMessageApiResponse:
+    def getMessageForUser(self, username: str) -> UserMessageApiResponse:
         if username not in self._messages:
-            abort(404, f'No messages for {username}')
+            abort(HTTPStatus.NOT_FOUND, f'No messages for {username}')
         return self._messages[username]
 
-    def setMessageForUser(self, from_username:str, to_username:str, message:str):
+    def setMessageForUser(self, from_username: str, to_username: str, message: str):
         if to_username in self._messages:
-            abort(403, f'User {to_username} has already gotten a message.')
+            abort(HTTPStatus.FORBIDDEN,
+                  f'User {to_username} has already gotten a message.')
         self._messages[to_username] = {
             'from_user': from_username,
             'message': message
         }
 
-    def isAuthorizedOrAbort(self, username:str, api_key:str):
+    def isAuthorizedOrAbort(self, username: str, api_key: str):
         '''Check if user is allowed or raise HTTPException'''
         # Expect this to raise for invalid user.
         self._user_manager.isAuthorizedOrAbort(username, api_key)
@@ -208,10 +207,15 @@ class Users(Resource):
         user = self._user_manager.getUserByName(username)
 
         # IMPORTANT: We shouldn't leak the users API key after creation.
-        return user.to_json(include_api_key=False)
+        return user.toJson(include_api_key=False)
 
     def put(self, username: str) -> UserModelApiResponse:
         '''Creates a new user if one doesn't already exist'''
+        # Defensive: They should never be able to create an 'admin' user
+        if username == ADMIN_USERNAME:
+            abort(HTTPStatus.FORBIDDEN,
+                  message=f'You cannot register the \"{ADMIN_USERNAME}\" username')
+
         user = self._user_manager.addUser(username)
 
         # IMPORTANT: It is okay to tell a user their API key once we created it.
@@ -274,23 +278,24 @@ class Whisper(Resource):
         current_state = self._game_manager.getGameStatus()
         if current_state == GameStatus.GAME_FINISHED:
             abort(
-                403, f'State: {current_state}. Game has finished. You should start listening for the next game to start.')
+                HTTPStatus.FORBIDDEN, f'State: {current_state}. Game has finished. You should start listening for the next game to start.')
 
         # Are there enough players?
         player_count = self._game_manager.getPlayerCount()
         if player_count < 3:
             abort(
-                403, f'There are not enough players. Need 3, have {player_count} players registered.')
+                HTTPStatus.FORBIDDEN, f'There are not enough players. Need 3, have {player_count} players registered.')
 
     def _getPlayersOrAbort(self, from_username, to_username) -> Tuple[UserModel]:
         '''Checks that the user can whisper to the other user or aborts.'''
         from_user = self._game_manager.getPlayerByName(from_username)
         if from_user.id != self._game_manager.getCurrentPlayerId():
-            abort(403, f'Sorry, {from_username}, it is not your turn!')
+            abort(HTTPStatus.FORBIDDEN,
+                  f'Sorry, {from_username}, it is not your turn!')
 
         to_user = self._game_manager.getPlayerByName(to_username)
         if to_user.id != self._game_manager.getNextPlayerId():
-            abort(403, f'Sorry, {to_username} is not next!')
+            abort(HTTPStatus.FORBIDDEN, f'Sorry, {to_username} is not next!')
 
         return from_user, to_user
 
@@ -313,7 +318,7 @@ class Listen(Resource):
     def __init__(self, game_manager: GameManager):
         self._game_manager = game_manager
 
-    def get(self, username:str) -> UserMessageApiResponse:
+    def get(self, username: str) -> UserMessageApiResponse:
         '''Listens for whispers sent to the user
 
         The response indicates the username of the current whisperer and the
@@ -328,11 +333,12 @@ class Listen(Resource):
         next_player = self._game_manager.getNextPlayer()
 
         if game_status == GameStatus.GAME_NOT_STARTED:
-            abort(425, f'Too early. The game has not started yet.')
+            abort(HTTPStatus.TOO_EARLY,
+                  f'Too early. The game has not started yet.')
         if game_status == GameStatus.GAME_AWAIT_FINISH:
             # It's not their turn but we're waiting for someone else to go.
             abort(
-                200, f'Everyone has gone except the last pair. Waiting for {current_player.username} to whisper to {next_player.username}.')
+                HTTPStatus.OK, f'Everyone has gone except the last pair. Waiting for {current_player.username} to whisper to {next_player.username}.')
 
         if current_player.username == username:
             # It's the user's turn, they should take it.
@@ -352,19 +358,26 @@ class Listen(Resource):
         return parser.parse_args(strict=True)
 
 
-# Game depdendencies
+def createApp():
+    # Game depdendencies
 
-user_manager = UserManager()
-game_manager = GameManager(user_manager)
+    user_manager = UserManager()
+    game_manager = GameManager(user_manager)
 
-# Setup routes
-api.add_resource(Users, '/users/<username>',
-                 resource_class_kwargs={'user_manager': UserManager()})
-api.add_resource(Listen, '/play/listen/<username>',
-                 resource_class_kwargs={'game_manager': game_manager})
-api.add_resource(Whisper, '/play/whisper/<username>',
-                 resource_class_kwargs={'game_manager': game_manager})
+    # Init app
+    app = Flask(__name__)
+    api = Api(app)
+
+    # Setup routes
+    api.add_resource(Users, '/users/<username>',
+                     resource_class_kwargs={'user_manager': UserManager()})
+    api.add_resource(Listen, '/play/listen/<username>',
+                     resource_class_kwargs={'game_manager': game_manager})
+    api.add_resource(Whisper, '/play/whisper/<username>',
+                     resource_class_kwargs={'game_manager': game_manager})
+    return app
 
 
 if __name__ == '__main__':
+    app = createApp()
     app.run(debug=True)

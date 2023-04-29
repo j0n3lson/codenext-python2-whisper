@@ -7,14 +7,14 @@ A service that lets you play Whisper Down The Lane with friends
 ## Stack
 
 - Docker: Provides a container that has all the dependencies so you don't have
-to install on your local computer youself.  
+  to install on your local computer youself.
 - VsCode: An IDE for coding. Also has container dev tools so that you can code
-inside the container. 
-- Flask: The API server 
+  inside the container.
+- Flask: The API server
 
 ## Code Organization
 
-- `/lab`: Contains code specific to the lab.  
+- `/lab`: Contains code specific to the lab.
 - `/server`: The flask server implementation.
 
 ## Environment Setup
@@ -42,13 +42,12 @@ Check out [Developing inside a
 Container](https://code.visualstudio.com/docs/devcontainers/containers) for more
 details about container development.
 
-
-- __Vs Code IDE:__ [Download](http://code.visualstudio.com/download) and install
-VSCode for your system. 
-- __Remote Dev Extensions__: Install the [Remote Developer Extensions
-Pack](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack)
-which contains an extension that initiates the container dev workflow when a
-`Dockerfile` is detected in a workspace.
+- **Vs Code IDE:** [Download](http://code.visualstudio.com/download) and install
+  VSCode for your system.
+- **Remote Dev Extensions**: Install the [Remote Developer Extensions
+  Pack](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack)
+  which contains an extension that initiates the container dev workflow when a
+  `Dockerfile` is detected in a workspace.
 
 You're all set! When you open your workspace it will suggest that you reopen the
 workspace in a container.
@@ -60,8 +59,8 @@ Launch your workspace in the container. Once inside, run the server like this:
     python server/api.py
 
 You can use the REST end points using the `curl` utility:
-    
-    # Get an existing user 
+
+    # Get an existing user
     curl http://localhost:5000/users/johnny
 
     # Create a new user. Notice the `-X PUT` option. This tells curl to send an
@@ -69,22 +68,35 @@ You can use the REST end points using the `curl` utility:
     # `Users.put()` route.
     curl http://localhost:5000/users/johnny -X PUT
 
+## Running Test
+
+Change into the directory and run, to run all test:
+
+    python -m unittest
+
 ## API
 
 The service has the following APIs implemented:
 
 ## Open to all
+
 - `/users/register/{username}`: Registers the given `{username}`. This should be
-the first thing a client calls. When called, this API registers a user and
-returns a unique API key. The API key is associated with the user's ID.  -
-`/play/listen/{api_key}`: `API KEY REQUIRED`. Let's a user check for a message.
-Clients should continuously check to after they have registered.  - `mesage:
-"The message"` If one is found.  - `message: ""`, an empty message if no
-messages are found.  - `message: "GAME OVER"` if the game has ended.  -
-`/play/whisper/{message}`: `API KEY REQUIRED`. Checks whether its the user's
-turn and sets the games current message to the given `{message}`.
+  the first thing a client calls. When called, this API registers a user and
+  returns a unique API key. The API key is associated with the user's ID.
+
+- `/play/listen/{api_key}`: `API KEY REQUIRED`. Let's a user check for a message.
+  Clients should continuously check to after they have registered.
+
+  - `mesage: "The message"` If one is found.
+
+  - `message: ""`, an empty message if no messages are found.
+
+  - `message: "GAME OVER"` if the game has ended.
+
+- `/play/whisper/{message}`: `API KEY REQUIRED`. Checks whether its the user's
+  turn and sets the games current message to the given `{message}`.
 
 ## Admin only
 
-- `/admin/snoop`: List all messages sent by all users at the given time.  -
-`/admin/endgame`: Ends the game for all players.
+- `/admin/snoop`: (TODO) List all messages sent by all users at the given time.
+- `/admin/endgame`: (TODO) Ends the game for all players.
