@@ -1,10 +1,12 @@
 import random
 import string
 import datetime
+import json
 
 from enum import Enum
 from flask import Flask
 from flask import request
+from flask import Response
 from flask_restful import abort
 from flask_restful import Api
 from flask_restful import Resource
@@ -40,9 +42,17 @@ class UserType(Enum):
 
 class UserModel():
     '''A user in the system.'''
-    # TODO: Evaluate using pydantic here. We can make this class a pydanic class
-    # and then export fields to JSON, excluding some fields. Also works nicely
-    # with test since the python classes should be directly comparable.
+    # TODO: Evaluate using ORM/ODMs like pydantic or marshmellow. Marshmellow
+    # specifically is called out in the flask documentation.
+    #   See: https://marshmallow.readthedocs.io/en/stable/
+    #   See: https://docs.pydantic.dev/latest/usage/models/
+    #
+    # Benefits:
+    #   - ORM: We can use plain python objects for the model and get and get
+    #   object <-> JSON (de)serialization for free. No more hand writing JSON in
+    #   the model.
+    #   - Testing: We can omit some fields and still get equality testing based
+    #   on either the object or the JSON.
 
     def __init__(self, id: int, username: str, type: UserType, api_key: str):
         self.id = id
@@ -141,7 +151,7 @@ class GameManager():
         self._user_manager = user_manager
         self._current_player_id = 1
         self._next_player_id = 2
-        self._messages: Dict[str, UserMessageApiResponse]
+        self._messages: Dict[str, UserMessageApiResponse] = dict()
 
     def get_game_status(self) -> GameStatus:
         '''Get the current game status.'''
@@ -242,16 +252,15 @@ class Whisper(Resource):
     def __init__(self, game_manager: GameManager):
         self._game_manager = game_manager
 
-    def put(self, username: str) -> WhisperPutApiResponse:
+    def post(self, to_username: str) -> WhisperPutApiResponse:
         '''Send a message to a given user'''
-        params = self._get_request_params()
-        api_key = params['api_key']
-        from_username = username
-        to_username = params['to_username']
-        message = params['message']
+        from_user_api_key = request.json['api_key']
+        from_username = request.json['from_username']
+        message = request.json['message']
 
         # Validate User
-        self._game_manager.is_authorized_or_abort(from_username, api_key)
+        self._game_manager.is_authorized_or_abort(
+            from_username, from_user_api_key)
 
         # Check if it's okay to play right now.
         self._can_whisper_or_abort()
@@ -300,7 +309,7 @@ class Whisper(Resource):
             abort(
                 HTTPStatus.FORBIDDEN, f'There are not enough players. Need 3, have {player_count} players registered.')
 
-    def _get_players_or_abort(self, from_username, to_username) -> Tuple[UserModel]:
+    def _get_players_or_abort(self, from_username, to_username) -> Tuple[UserModel, UserModel]:
         '''Checks that the user can whisper to the other user or aborts.'''
         from_user = self._game_manager.get_player_by_name(from_username)
         if from_user.id != self._game_manager.get_current_player_id():
@@ -346,13 +355,13 @@ class Listen(Resource):
         if game_status == GameStatus.GAME_NOT_STARTED:
             abort(HTTPStatus.FORBIDDEN,
                   message=f'Too early. The game has not started yet.')
-        if game_status == GameStatus.GAME_AWAIT_FINISH:
-            # It's not their turn but we're waiting for someone else to go.
-            abort(
-                HTTPStatus.OK, message=f'Everyone has gone except the last pair. Waiting for {current_player.username} to whisper to {next_player.username}.')
 
         current_player = self._game_manager.get_current_player()
         next_player = self._game_manager.get_next_player()
+        if game_status == GameStatus.GAME_AWAIT_FINISH:
+            # It's not their turn but we're waiting for someone else to go.
+            m =  f'Awaiting game end. Waiting for {current_player.username} to whisper to {next_player.username}.'
+            return Response(m, HTTPStatus.OK)
 
         if current_player.username == username:
             # It's the user's turn, they should take it.
@@ -383,11 +392,11 @@ def create_app():
     api = Api(app)
 
     # Setup routes
-    api.add_resource(Users, '/users/<username>',
+    api.add_resource(Users, '/users/<string:username>',
                      resource_class_kwargs={'user_manager': user_manager})
-    api.add_resource(Listen, '/play/listen/<username>',
+    api.add_resource(Listen, '/play/listen/<string:username>',
                      resource_class_kwargs={'game_manager': game_manager})
-    api.add_resource(Whisper, '/play/whisper/<username>',
+    api.add_resource(Whisper, '/play/whisper/<string:to_username>',
                      resource_class_kwargs={'game_manager': game_manager})
     return app
 
