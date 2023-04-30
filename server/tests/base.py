@@ -8,7 +8,7 @@ from absl.testing import absltest
 mock = absltest.mock
 
 
-class BaseTestCase(absltest.TestCase):
+class BaseApiTestCase(absltest.TestCase):
 
     def setUp(self) -> None:
         super().setUp()

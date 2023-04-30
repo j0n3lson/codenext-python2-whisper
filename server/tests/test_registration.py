@@ -1,15 +1,15 @@
-'''Unit test for the /users endpoint.'''
+'''API test for registration and user management using the /users endpoint.'''
 
 import json
 import string
 
 from absl.testing import parameterized
 from http import HTTPStatus
-from server.tests.base import BaseTestCase
+from server.tests.base import BaseApiTestCase
 
 
 
-class UsersTest(BaseTestCase, parameterized.TestCase):
+class RegistrationApiTest(BaseApiTestCase, parameterized.TestCase):
 
     def test_always_creates_admin_user(self):
         response = self.client.get('/users/admin')
