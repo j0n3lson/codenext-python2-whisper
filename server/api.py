@@ -6,8 +6,8 @@ import json
 from enum import Enum
 from flask import Flask
 from flask import request
-from flask import Response
 from flask import jsonify
+from flask import make_response 
 from flask_restful import abort
 from flask_restful import Api
 from flask_restful import Resource
@@ -371,11 +371,11 @@ class Listen(Resource):
                 'next_player': next_player.username,
             }
 
-        response_message = jsonify(
-            info=f'Sorry, it\'s not your turn',
+        message =  jsonify(
+            info=f'Sorry, it\'s not your turn.',
             game_status=game_status.name,
-            current_player=current_player.username)
-        return Response(response_message, HTTPStatus.NOT_FOUND)
+            waiting_on=current_player.username)
+        return make_response(message, HTTPStatus.NOT_FOUND)
 
     def _get_request_params(self) -> Type[reqparse.Namespace]:
         # TODO: Not sure if this return pytype annotation is correct.

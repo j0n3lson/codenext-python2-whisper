@@ -16,7 +16,7 @@ class GamePlayApiTest(BaseApiTestCase):
 
         self.assertEqual(HTTPStatus.FORBIDDEN, response.status_code)
 
-    def test_listen_when_waiting_for_user_to_take_turn_returns_info_message(self):
+    def test_listen_when_currently_the_listeners_turn_sends_info_message(self):
         user01_api_key = self.register_user('user01')
         user02_api_key = self.register_user('user02')
         self.register_user('user03')
@@ -33,6 +33,21 @@ class GamePlayApiTest(BaseApiTestCase):
         response_whisper = json.loads(data['message'])
         self.assertEqual(response_whisper['from_user'], 'user01')
         self.assertEqual(response_whisper['message'], 'first whisper')
+
+    def test_listen_when_not_currently_the_listeners_turn_sends_info_message(self):
+        user01_api_key = self.register_user('user01')
+        self.register_user('user02')
+        user03_api_key = self.register_user('user03')
+        self.post_whisper('user01', user01_api_key, 'user02', 'first whisper')
+
+        response = self.client.get(
+            f'/play/listen/user03?api_key={user03_api_key}')
+
+        self.assertEqual(HTTPStatus.NOT_FOUND, response.status_code)
+        data = json.loads(response.data)
+        self.assertEqual(data["info"], 'Sorry, it\'s not your turn.')
+        self.assertEqual(data['game_status'], api.GameStatus.GAME_AWAIT_FINISH.name)
+        self.assertEqual(data['waiting_on'], 'user02')
 
     def test_whisper_when_waiting_for_game_end_sets_game_status_await_finish(self):
         user01_api_key = self.register_user('user01')
