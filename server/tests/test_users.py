@@ -1,13 +1,15 @@
 '''Unit test for the /users endpoint.'''
 
 import json
+import string
 
+from absl.testing import parameterized
 from http import HTTPStatus
 from server.tests.base import BaseTestCase
 
 
 
-class UsersTest(BaseTestCase):
+class UsersTest(BaseTestCase, parameterized.TestCase):
 
     def test_always_creates_admin_user(self):
         response = self.client.get('/users/admin')
@@ -25,6 +27,16 @@ class UsersTest(BaseTestCase):
 
         self.assertEqual(HTTPStatus.NOT_FOUND, response.status_code)
 
+
+    @parameterized.named_parameters(
+        ('when_empty', string.whitespace),
+        ('when_has_spaces', 'user name has spaces'),
+        ('when_special_characters', string.punctuation))
+    def test_put_when_invalid_username_abort_bad_request(self, username):
+        response = self.client.put(f'/users/{username}')
+
+        self.assertEqual(HTTPStatus.BAD_REQUEST, response.status_code)
+
     def test_put_when_non_existent_user_creates_user(self):
         response = self.client.put('/users/newuser')
 
@@ -35,7 +47,7 @@ class UsersTest(BaseTestCase):
         self.assertEqual(data['type'], 'REGULAR')
         self.assertIn('api_key', data.keys())
 
-    def test_put_when_existing_user_does_not_create_user(self):
+    def test_put_when_existing_user_abort_conflict(self):
         response = self.client.put('/users/newuser')
         self.assertEqual(HTTPStatus.OK, response.status_code)
 

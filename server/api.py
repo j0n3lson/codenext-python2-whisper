@@ -9,7 +9,9 @@ from flask_restful import Api
 from flask_restful import Resource
 from flask_restful import reqparse
 from http import HTTPStatus
+import regex
 from typing import Dict, Tuple, Type
+
 
 
 # The JSON object sent to clients.
@@ -38,6 +40,9 @@ class UserType(Enum):
 
 class UserModel():
     '''A user in the system.'''
+    # TODO: Evaluate using pydantic here. We can make this class a pydanic class
+    # and then export fields to JSON, excluding some fields. Also works nicely
+    # with test since the python classes should be directly comparable.
 
     def __init__(self, id: int, username: str, type: UserType, api_key: str):
         self.id = id
@@ -195,6 +200,8 @@ class GameManager():
 
 class Users(Resource):
     '''Handles the /users endpoint'''
+    
+    VALID_USERNAME_REGEX = regex.compile('[a-z]+[a-zA-Z0-9]+')
 
     def __init__(self, user_manager: UserManager):
         self._user_manager = user_manager
@@ -208,15 +215,24 @@ class Users(Resource):
 
     def put(self, username: str) -> UserModelApiResponse:
         '''Creates a new user if one doesn't already exist'''
-        # Defensive: They should never be able to create an 'admin' user
-        if username == ADMIN_USERNAME:
-            abort(HTTPStatus.FORBIDDEN,
-                  message=f'You cannot register the \"{ADMIN_USERNAME}\" username')
-
+        self._validate_username_or_abort(username)
         user = self._user_manager.add_user(username)
 
         # IMPORTANT: It is okay to tell a user their API key once we created it.
         return user.to_json(include_api_key=True)
+
+    @classmethod
+    def _validate_username_or_abort(cls, username:str):
+        if not username:
+            abort(HTTPStatus.BAD_REQUEST, 'Username cannot be empty')
+
+        if username == ADMIN_USERNAME:
+            abort(HTTPStatus.FORBIDDEN,
+                  message=f'You cannot register the \"{ADMIN_USERNAME}\" username')
+
+        is_valid = regex.fullmatch(cls.VALID_USERNAME_REGEX, username) != None
+        if(not is_valid):
+            abort(HTTPStatus.BAD_REQUEST, message=f'Username \"{username}\" is invalid.')
 
 
 class Whisper(Resource):
