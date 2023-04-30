@@ -18,7 +18,7 @@ class BaseTestCase(absltest.TestCase):
             datetime, 'datetime', wraps=datetime.datetime).start()
         self.mock_datetime.now.return_value = datetime.datetime(2023, 4, 29)
 
-        app = api.createApp()
+        app = api.create_app()
         app.config.update({
             "TESTING": True,
         })
