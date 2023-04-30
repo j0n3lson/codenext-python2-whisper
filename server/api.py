@@ -7,6 +7,7 @@ from enum import Enum
 from flask import Flask
 from flask import request
 from flask import Response
+from flask import jsonify
 from flask_restful import abort
 from flask_restful import Api
 from flask_restful import Resource
@@ -172,7 +173,7 @@ class GameManager():
         return self._user_manager.get_user_by_id(self._current_player_id)
 
     def set_next_player_id(self, id: int) -> None:
-        self._current_player_id = id
+        self._next_player_id = id
 
     def get_next_player_id(self) -> int:
         '''Get the id of the user who should whisper next.'''
@@ -278,8 +279,8 @@ class Whisper(Resource):
         # Whisper: Add a Whisper {message, from_user, to_user} to the model
         self._game_manager.set_message_for_user(
             from_user.username, to_user.username, message)
-        self._game_manager.set_current_player_id(to_user.id)
-        self._game_manager.set_next_player_id(to_user.id + 1)
+        self._game_manager.set_current_player_id(from_user.id+1)
+        self._game_manager.set_next_player_id(to_user.id+1)
 
         # Check if we're ending or should wait for the end of the game.
         player_count = self._game_manager.get_player_count()
@@ -358,20 +359,23 @@ class Listen(Resource):
 
         current_player = self._game_manager.get_current_player()
         next_player = self._game_manager.get_next_player()
-        if game_status == GameStatus.GAME_AWAIT_FINISH:
-            # It's not their turn but we're waiting for someone else to go.
-            m =  f'Awaiting game end. Waiting for {current_player.username} to whisper to {next_player.username}.'
-            return Response(m, HTTPStatus.OK)
 
         if current_player.username == username:
             # It's the user's turn, they should take it.
+            message = json.dumps(
+                self._game_manager.get_message_for_user(username))
             return {
-                'info': f'Hey {username}, it\'s your turn to whisper to {next_player}',
+                'info': f'Hey {username}, it\'s your turn to whisper to {next_player.username}',
+                'message': message,
                 'game_status': game_status.name,
-                'current_whisperer': username,
-                'next_whisperer': next_player,
+                'next_player': next_player.username,
             }
-        return self._game_manager.get_message_for_user(username)
+
+        response_message = jsonify(
+            info=f'Sorry, it\'s not your turn',
+            game_status=game_status.name,
+            current_player=current_player.username)
+        return Response(response_message, HTTPStatus.NOT_FOUND)
 
     def _get_request_params(self) -> Type[reqparse.Namespace]:
         # TODO: Not sure if this return pytype annotation is correct.
