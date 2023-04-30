@@ -8,7 +8,6 @@ from http import HTTPStatus
 from server.tests.base import BaseApiTestCase
 
 
-
 class RegistrationApiTest(BaseApiTestCase, parameterized.TestCase):
 
     def test_always_creates_admin_user(self):
@@ -26,7 +25,6 @@ class RegistrationApiTest(BaseApiTestCase, parameterized.TestCase):
         response = self.client.get('/users/not_a_user')
 
         self.assertEqual(HTTPStatus.NOT_FOUND, response.status_code)
-
 
     @parameterized.named_parameters(
         ('when_empty', string.whitespace),

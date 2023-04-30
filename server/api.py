@@ -4,6 +4,7 @@ import datetime
 
 from enum import Enum
 from flask import Flask
+from flask import request
 from flask_restful import abort
 from flask_restful import Api
 from flask_restful import Resource
@@ -11,7 +12,6 @@ from flask_restful import reqparse
 from http import HTTPStatus
 import regex
 from typing import Dict, Tuple, Type
-
 
 
 # The JSON object sent to clients.
@@ -81,7 +81,7 @@ class UserManager():
 
         self._next_id = 0
         self.add_user(ADMIN_USERNAME, user_type=UserType.ADMIN,
-                     api_key=ADMIN_API_KEY)
+                      api_key=ADMIN_API_KEY)
 
     def get_user_by_name(self, username: str) -> UserModel:
         '''Returns the user or raise HTTPException if not found.'''
@@ -123,7 +123,7 @@ class UserManager():
     def get_users_count(self) -> int:
         return len(self._user_map)
 
-    def is_authorized_or_abort(self, username, api_key) -> None:
+    def is_authorized_or_abort(self, username: str, api_key: str) -> None:
         '''Check that username exist and is associated with the given key.'''
         # Expect this to throw if user doesn't exist.
         user = self.get_user_by_name(username)
@@ -200,7 +200,7 @@ class GameManager():
 
 class Users(Resource):
     '''Handles the /users endpoint'''
-    
+
     VALID_USERNAME_REGEX = regex.compile('[a-z]+[a-zA-Z0-9]+')
 
     def __init__(self, user_manager: UserManager):
@@ -222,7 +222,7 @@ class Users(Resource):
         return user.to_json(include_api_key=True)
 
     @classmethod
-    def _validate_username_or_abort(cls, username:str):
+    def _validate_username_or_abort(cls, username: str):
         if not username:
             abort(HTTPStatus.BAD_REQUEST, 'Username cannot be empty')
 
@@ -231,8 +231,9 @@ class Users(Resource):
                   message=f'You cannot register the \"{ADMIN_USERNAME}\" username')
 
         is_valid = regex.fullmatch(cls.VALID_USERNAME_REGEX, username) != None
-        if(not is_valid):
-            abort(HTTPStatus.BAD_REQUEST, message=f'Username \"{username}\" is invalid.')
+        if (not is_valid):
+            abort(HTTPStatus.BAD_REQUEST,
+                  message=f'Username \"{username}\" is invalid.')
 
 
 class Whisper(Resource):
@@ -342,16 +343,16 @@ class Listen(Resource):
         self._game_manager.is_authorized_or_abort(username, api_key)
 
         game_status = self._game_manager.get_game_status()
-        current_player = self._game_manager.get_current_player()
-        next_player = self._game_manager.get_next_player()
-
         if game_status == GameStatus.GAME_NOT_STARTED:
-            abort(HTTPStatus.TOO_EARLY,
-                  f'Too early. The game has not started yet.')
+            abort(HTTPStatus.FORBIDDEN,
+                  message=f'Too early. The game has not started yet.')
         if game_status == GameStatus.GAME_AWAIT_FINISH:
             # It's not their turn but we're waiting for someone else to go.
             abort(
-                HTTPStatus.OK, f'Everyone has gone except the last pair. Waiting for {current_player.username} to whisper to {next_player.username}.')
+                HTTPStatus.OK, message=f'Everyone has gone except the last pair. Waiting for {current_player.username} to whisper to {next_player.username}.')
+
+        current_player = self._game_manager.get_current_player()
+        next_player = self._game_manager.get_next_player()
 
         if current_player.username == username:
             # It's the user's turn, they should take it.
@@ -383,7 +384,7 @@ def create_app():
 
     # Setup routes
     api.add_resource(Users, '/users/<username>',
-                     resource_class_kwargs={'user_manager': UserManager()})
+                     resource_class_kwargs={'user_manager': user_manager})
     api.add_resource(Listen, '/play/listen/<username>',
                      resource_class_kwargs={'game_manager': game_manager})
     api.add_resource(Whisper, '/play/whisper/<username>',
