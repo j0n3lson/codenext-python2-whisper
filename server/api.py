@@ -12,6 +12,24 @@ from flask_restful import reqparse
 from http import HTTPStatus
 from typing import Dict, Tuple, Type
 
+# TODO(j0n3lson) Consider using setup.py
+# (https://www.educative.io/answers/what-is-setuppy) and centralizing the
+# installation there. For example we can remove the requirements.txt file and
+# centralize them in setup.py -- that way Dockerfile and github action can use a
+# single `pip install` command.
+
+# TODO(j0n3lson) Add a main.py and separate out the flask_restful.Resource
+# classes into api.py
+
+# TODO(j0n3lson) Write reference client implementation for lab
+
+# TODO(j0n3lson) Breakdown reference client implementation for lab. Considering
+# keeping multiple branches (e.g. v1.0-easy-mode, v1.0-intermediate,
+# v1.0-advanced). Each one could have slighly less implemenation allowing
+# students to fill in more.
+
+# TODO(j0n3lson) Figure out where to host this server/container.
+
 
 # The JSON object sent to clients.
 UserMessageApiResponse = Dict[str, str]
@@ -19,7 +37,7 @@ UserModelApiResponse = Dict[str, str]
 WhisperPutApiResponse = Dict[str, str]
 
 
-# TODO(j0n3lson): Don't store the admin's API key in code. Take it as a flag
+# TODO(j0n3lson) Don't store the admin's API key in code. Take it as a flag
 # saved in a github key.
 ADMIN_API_KEY = 'GVTu6CaxvzHQWFAn6eMi8TfVVq2BcK'
 ADMIN_USERNAME = 'admin'
@@ -39,7 +57,7 @@ class UserType(Enum):
 
 class UserModel():
     '''A user in the system.'''
-    # TODO: Evaluate using ORM/ODMs like pydantic or marshmellow. Marshmellow
+    # TODO(j0n3lson) Evaluate using ORM/ODMs like pydantic or marshmellow. Marshmellow
     # specifically is called out in the flask documentation.
     #   See: https://marshmallow.readthedocs.io/en/stable/
     #   See: https://docs.pydantic.dev/latest/usage/models/
@@ -222,6 +240,9 @@ class Users(Resource):
 
     def put(self, username: str) -> UserModelApiResponse:
         '''Creates a new user if one doesn't already exist'''
+        # TODO(j0n3lson) Block registration when game is started. We'll need to
+        # remove the direct dependency on UserManager here and instead creates
+        # users via GameManager.
         self._validate_username_or_abort(username)
         user = self._user_manager.add_user(username)
 
@@ -270,7 +291,6 @@ class Whisper(Resource):
         # If we got here, the user is authorized and can whisper to the
         # recipient so we can start the game.
         if self._game_manager.get_game_status() == GameStatus.GAME_NOT_STARTED:
-            # TODO: Block registration when game is started.
             self._game_manager.set_game_status(GameStatus.GAME_STARTED)
 
         # Whisper: Add a Whisper {message, from_user, to_user} to the model
@@ -364,7 +384,6 @@ class Listen(Resource):
         return flask.make_response(message, HTTPStatus.NOT_FOUND)
 
     def _get_request_params(self) -> Type[reqparse.Namespace]:
-        # TODO: Not sure if this return pytype annotation is correct.
         parser = reqparse.RequestParser()
         parser.add_argument('api_key', type=str,
                             help='The api key for the user')
@@ -382,6 +401,8 @@ def create_app():
     api = flask_restful.Api(app)
 
     # Setup routes
+    # TODO(j0n3lson) Add /admin/snoop API that tails all messages.
+    # TODO(j0n3lson) Add /admin/endgame API that gracefully shutsdown game.
     api.add_resource(Users, '/users/<string:username>',
                      resource_class_kwargs={'user_manager': user_manager})
     api.add_resource(Listen, '/play/listen/<string:username>',
