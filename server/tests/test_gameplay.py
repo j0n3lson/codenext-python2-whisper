@@ -58,6 +58,14 @@ class GamePlayApiTest(BaseApiTestCase):
         self.assertEqual(api.GameStatus.GAME_AWAIT_FINISH.name,
                          whisper_response_data['game_status'])
 
+    def test_whisper_when_game_ended_sets_game_status_game_finished(self):
+        user01_api_key = self.register_user('user01')
+        self.register_user('user02')
+        whisper_response_data = self.post_whisper(
+            'user01', user01_api_key, 'user02', 'first whisper')
+        self.assertEqual(api.GameStatus.GAME_FINISHED.name,
+                         whisper_response_data['game_status'])
+
     def register_user(self, username: str) -> str:
         '''Registers user and returns the generated API key.'''
         response = self.client.put(f'/users/{username}')
