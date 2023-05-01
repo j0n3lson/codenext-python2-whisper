@@ -1,19 +1,15 @@
-import random
-import string
 import datetime
+import flask
+import flask_restful
 import json
+import random
+import regex
+import string
 
 from enum import Enum
-from flask import Flask
-from flask import request
-from flask import jsonify
-from flask import make_response 
-from flask_restful import abort
-from flask_restful import Api
 from flask_restful import Resource
 from flask_restful import reqparse
 from http import HTTPStatus
-import regex
 from typing import Dict, Tuple, Type
 
 
@@ -64,7 +60,6 @@ class UserModel():
 
     def to_json(self, include_api_key=False) -> UserModelApiResponse:
         '''Returns a JSON serializable object representing the user.'''
-        # TODO: Use flask.jsonify here: https://www.fullstackpython.com/flask-json-jsonify-examples.html
         json = {
             'id': self.id,
             'user': self.username,
@@ -98,7 +93,7 @@ class UserManager():
         '''Returns the user or raise HTTPException if not found.'''
         user = self._user_map.get(username, None)
         if not user:
-            abort(
+            flask_restful.abort(
                 HTTPStatus.NOT_FOUND, message=f'User {username} does not exist. Did you /users/{username}')
         return user
 
@@ -106,7 +101,7 @@ class UserManager():
         '''Returns the user with given id or raise.'''
         user = self._user_id_map.get(id, None)
         if not user:
-            abort(
+            flask_restful.abort(
                 HTTPStatus.NOT_FOUND, message=f'No user with id={id} found. Did you /users/<username>')
         return user
 
@@ -116,8 +111,8 @@ class UserManager():
         if user:
             created_on = user.created_on.strftime(
                 '%m/%d/%Y %H:%M:%S')
-            abort(HTTPStatus.CONFLICT,
-                  message=f'User {username} was created on {created_on}')
+            flask_restful.abort(HTTPStatus.CONFLICT,
+                                message=f'User {username} was created on {created_on}')
 
         # Create new user
         if not api_key:
@@ -139,7 +134,7 @@ class UserManager():
         # Expect this to throw if user doesn't exist.
         user = self.get_user_by_name(username)
         if user.api_key != api_key:
-            abort(
+            flask_restful.abort(
                 HTTPStatus.FORBIDDEN, f'Specified API key ({api_key}) does not match for {username}.')
 
 
@@ -191,13 +186,14 @@ class GameManager():
 
     def get_message_for_user(self, username: str) -> UserMessageApiResponse:
         if username not in self._messages:
-            abort(HTTPStatus.NOT_FOUND, f'No messages for {username}')
+            flask_restful.abort(HTTPStatus.NOT_FOUND,
+                                f'No messages for {username}')
         return self._messages[username]
 
     def set_message_for_user(self, from_username: str, to_username: str, message: str):
         if to_username in self._messages:
-            abort(HTTPStatus.FORBIDDEN,
-                  f'User {to_username} has already gotten a message.')
+            flask_restful.abort(HTTPStatus.FORBIDDEN,
+                                f'User {to_username} has already gotten a message.')
         self._messages[to_username] = {
             'from_user': from_username,
             'message': message
@@ -235,16 +231,17 @@ class Users(Resource):
     @classmethod
     def _validate_username_or_abort(cls, username: str):
         if not username:
-            abort(HTTPStatus.BAD_REQUEST, 'Username cannot be empty')
+            flask_restful.abort(HTTPStatus.BAD_REQUEST,
+                                'Username cannot be empty')
 
         if username == ADMIN_USERNAME:
-            abort(HTTPStatus.FORBIDDEN,
-                  message=f'You cannot register the \"{ADMIN_USERNAME}\" username')
+            flask_restful.abort(HTTPStatus.FORBIDDEN,
+                                message=f'You cannot register the \"{ADMIN_USERNAME}\" username')
 
         is_valid = regex.fullmatch(cls.VALID_USERNAME_REGEX, username) != None
         if (not is_valid):
-            abort(HTTPStatus.BAD_REQUEST,
-                  message=f'Username \"{username}\" is invalid.')
+            flask_restful.abort(HTTPStatus.BAD_REQUEST,
+                                message=f'Username \"{username}\" is invalid.')
 
 
 class Whisper(Resource):
@@ -255,9 +252,9 @@ class Whisper(Resource):
 
     def post(self, to_username: str) -> WhisperPutApiResponse:
         '''Send a message to a given user'''
-        from_user_api_key = request.json['api_key']
-        from_username = request.json['from_username']
-        message = request.json['message']
+        from_user_api_key = flask.request.json['api_key']
+        from_username = flask.request.json['from_username']
+        message = flask.request.json['message']
 
         # Validate User
         self._game_manager.is_authorized_or_abort(
@@ -301,39 +298,28 @@ class Whisper(Resource):
         # Are we in the right state?
         current_state = self._game_manager.get_game_status()
         if current_state == GameStatus.GAME_FINISHED:
-            abort(
+            flask_restful.abort(
                 HTTPStatus.FORBIDDEN, f'State: {current_state}. Game has finished. You should start listening for the next game to start.')
 
         # Are there enough players?
         player_count = self._game_manager.get_player_count()
         if player_count < 3:
-            abort(
+            flask_restful.abort(
                 HTTPStatus.FORBIDDEN, f'There are not enough players. Need 3, have {player_count} players registered.')
 
     def _get_players_or_abort(self, from_username, to_username) -> Tuple[UserModel, UserModel]:
         '''Checks that the user can whisper to the other user or aborts.'''
         from_user = self._game_manager.get_player_by_name(from_username)
         if from_user.id != self._game_manager.get_current_player_id():
-            abort(HTTPStatus.FORBIDDEN,
-                  f'Sorry, {from_username}, it is not your turn!')
+            flask_restful.abort(HTTPStatus.FORBIDDEN,
+                                f'Sorry, {from_username}, it is not your turn!')
 
         to_user = self._game_manager.get_player_by_name(to_username)
         if to_user.id != self._game_manager.get_next_player_id():
-            abort(HTTPStatus.FORBIDDEN, f'Sorry, {to_username} is not next!')
+            flask_restful.abort(HTTPStatus.FORBIDDEN,
+                                f'Sorry, {to_username} is not next!')
 
         return from_user, to_user
-
-    def _get_request_params(self) -> Type[reqparse.Namespace]:
-        # TODO: Not sure if this return pytype annotation is correct.
-        parser = reqparse.RequestParser()
-        parser.add_argument('api_key', type=str,
-                            help='The api key for the user')
-
-        parser.add_argument('to_username', type=str,
-                            help='The user that will get a message.')
-        parser.add_argument('message', type=str,
-                            help='The message that will be sent.')
-        return parser.parse_args(strict=True)
 
 
 class Listen(Resource):
@@ -354,8 +340,8 @@ class Listen(Resource):
 
         game_status = self._game_manager.get_game_status()
         if game_status == GameStatus.GAME_NOT_STARTED:
-            abort(HTTPStatus.FORBIDDEN,
-                  message=f'Too early. The game has not started yet.')
+            flask_restful.abort(HTTPStatus.FORBIDDEN,
+                                message=f'Too early. The game has not started yet.')
 
         current_player = self._game_manager.get_current_player()
         next_player = self._game_manager.get_next_player()
@@ -371,11 +357,11 @@ class Listen(Resource):
                 'next_player': next_player.username,
             }
 
-        message =  jsonify(
+        message = flask.jsonify(
             info=f'Sorry, it\'s not your turn.',
             game_status=game_status.name,
             waiting_on=current_player.username)
-        return make_response(message, HTTPStatus.NOT_FOUND)
+        return flask.make_response(message, HTTPStatus.NOT_FOUND)
 
     def _get_request_params(self) -> Type[reqparse.Namespace]:
         # TODO: Not sure if this return pytype annotation is correct.
@@ -392,8 +378,8 @@ def create_app():
     game_manager = GameManager(user_manager)
 
     # Init app
-    app = Flask(__name__)
-    api = Api(app)
+    app = flask.Flask(__name__)
+    api = flask_restful.Api(app)
 
     # Setup routes
     api.add_resource(Users, '/users/<string:username>',
