@@ -17,9 +17,6 @@ from typing import Dict, Tuple, Type, List
 # centralize them in setup.py -- that way Dockerfile and github action can use a
 # single `pip install` command.
 
-# TODO(j0n3lson) Add a main.py and separate out the flask_restful.Resource
-# classes into api.py
-
 # TODO(j0n3lson) Write reference client implementation for lab
 
 # TODO(j0n3lson) Breakdown reference client implementation for lab. Considering

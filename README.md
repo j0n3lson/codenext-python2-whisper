@@ -78,21 +78,30 @@ Change into the directory and run, to run all test:
 
 The service has the following APIs implemented:
 
-## Open to all
+### Listening for a Message
 
-- `/play/listen/{api_key}`: `API KEY REQUIRED`. Let's a user check for a message.
-  Clients should continuously check to after they have registered.
+```
+import request
+response = requests.put('http://localhost:5000/play/listen/user1, params={'api_key': 'abc'})
+print(response.json())
+```
 
-  - `mesage: "The message"` If one is found.
+### Sending a Message
 
-  - `message: ""`, an empty message if no messages are found.
+```
+import json
+import request
 
-  - `message: "GAME OVER"` if the game has ended.
+payload = json.dumps({
+    "from_username": self._username,
+    "api_key": self._api_key,
+    "message": message
+})
 
-- `/play/whisper/{message}`: `API KEY REQUIRED`. Checks whether its the user's
-  turn and sets the games current message to the given `{message}`.
-
-## Admin only
-
-- `/admin/snoop`: (TODO) List all messages sent by all users at the given time.
-- `/admin/endgame`: (TODO) Ends the game for all players.
+url = f'{api_server}/play/whisper/{to_username}'
+response = self.client.post(
+    f'http://localhost:5000/play/whisper/user2',
+    headers={"Content-Type": "application/json"}, 
+    data=payload,
+)
+```
