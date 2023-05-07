@@ -368,20 +368,22 @@ class Listen(Resource):
 
         if current_player.username == username:
             # It's the user's turn, they should take it.
-            message = json.dumps(
+            sent_mesage = json.dumps(
                 self._game_manager.get_message_for_user(username))
-            return {
-                'info': f'Hey {username}, it\'s your turn to whisper to {next_player.username}',
-                'message': message,
-                'game_status': game_status.name,
-                'next_player': next_player.username,
-            }
+            response = flask.jsonify(
+                info=f'Hey {username}, it\'s your turn to whisper to {next_player.username}',
+                message=sent_mesage,
+                game_status=game_status.name,
+                current_player=username,
+                next_player=next_player.username,
+            )
+            return flask.make_response(response, HTTPStatus.OK)
 
-        message = flask.jsonify(
+        response = flask.jsonify(
             info=f'Sorry, it\'s not your turn.',
             game_status=game_status.name,
-            waiting_on=current_player.username)
-        return flask.make_response(message, HTTPStatus.NOT_FOUND)
+            current_player=current_player.username)
+        return flask.make_response(response, HTTPStatus.NOT_FOUND)
 
     def _get_request_params(self) -> Type[reqparse.Namespace]:
         parser = reqparse.RequestParser()
