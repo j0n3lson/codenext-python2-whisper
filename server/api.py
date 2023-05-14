@@ -3,14 +3,13 @@ import flask
 import flask_restful
 import json
 import random
-import regex
 import string
 
 from enum import Enum
-from flask_restful import Resource
-from flask_restful import reqparse
+from flask_restful import reqparse, Resource
 from http import HTTPStatus
-from typing import Dict, Tuple, Type
+from marshmallow import fields, post_load, Schema, validate
+from typing import Dict, Tuple, Type, List
 
 # TODO(j0n3lson) Consider using setup.py
 # (https://www.educative.io/answers/what-is-setuppy) and centralizing the
@@ -55,25 +54,26 @@ class UserType(Enum):
     ADMIN = 2
 
 
+class UserModelSchema(Schema):
+    id = fields.Int(required=True, validate=validate.NoneOf(
+        [0], error='Invalid user id: id={input} is reserved for username=admin'))
+    username = fields.Str(
+        required=True, validate=[validate.Regexp('[a-z]+[a-zA-Z0-9]+'), validate.NoneOf(['admin'])])
+    type = fields.Enum(UserType, required=True)
+    api_key = fields.Str(
+        required=True, validate=validate.Regexp('[a-zA-Z0-9]+'))
+
+    @post_load
+    def make_user_model(self, data, **kwargs):
+        return UserModel(**data)
+
+
 class UserModel():
     '''A user in the system.'''
-    # TODO(j0n3lson) Evaluate using ORM/ODMs like pydantic or marshmellow. Marshmellow
-    # specifically is called out in the flask documentation.
-    #   See: https://marshmallow.readthedocs.io/en/stable/
-    #   See: https://docs.pydantic.dev/latest/usage/models/
-    #
-    # Benefits:
-    #   - ORM: We can use plain python objects for the model and get and get
-    #   object <-> JSON (de)serialization for free. No more hand writing JSON in
-    #   the model.
-    #   - Testing: We can omit some fields and still get equality testing based
-    #   on either the object or the JSON.
-
     def __init__(self, id: int, username: str, type: UserType, api_key: str):
         self.id = id
         self.username = username
         self.type = type
-        self.created_on = datetime.datetime.now()
         self.api_key = api_key
 
     def to_json(self, include_api_key=False) -> UserModelApiResponse:
@@ -82,7 +82,6 @@ class UserModel():
             'id': self.id,
             'user': self.username,
             'type': self.type.name,
-            'created_on': self.created_on.strftime('%m/%d/%Y %H:%M:%S')
         }
         if include_api_key:
             json['api_key'] = self.api_key
@@ -93,7 +92,7 @@ class UserModel():
 class UserManager():
     '''Manage users in the system'''
 
-    def __init__(self):
+    def __init__(self, users: List[UserModel]):
         # A map of username to UserModel object.
         self._user_map: Dict[str, UserModel] = dict()
 
@@ -104,8 +103,7 @@ class UserManager():
         self._user_id_map: Dict[int, UserModel] = dict()
 
         self._next_id = 0
-        self.add_user(ADMIN_USERNAME, user_type=UserType.ADMIN,
-                      api_key=ADMIN_API_KEY)
+        self.add_all_users(users)
 
     def get_user_by_name(self, username: str) -> UserModel:
         '''Returns the user or raise HTTPException if not found.'''
@@ -123,26 +121,11 @@ class UserManager():
                 HTTPStatus.NOT_FOUND, message=f'No user with id={id} found. Did you /users/<username>')
         return user
 
-    def add_user(self, username: str, user_type: UserType = UserType.REGULAR, api_key: str = None) -> UserModel:
-        '''Creates new user and returns it.'''
-        user = self._user_map.get(username, None)
-        if user:
-            created_on = user.created_on.strftime(
-                '%m/%d/%Y %H:%M:%S')
-            flask_restful.abort(HTTPStatus.CONFLICT,
-                                message=f'User {username} was created on {created_on}')
-
-        # Create new user
-        if not api_key:
-            api_key = ''.join(random.choices(
-                string.ascii_letters + string.digits, k=30))
-        new_user = UserModel(id=self._next_id, username=username,
-                             type=user_type, api_key=api_key)
-        self._next_id += 1
-        self._user_map[username] = new_user
-        self._user_api_key_map[new_user.api_key] = new_user
-        self._user_id_map[new_user.id] = new_user
-        return new_user
+    def add_all_users(self, users: List[UserModel]):
+        for user in users:
+            self._user_map[user.username] = user
+            self._user_api_key_map[user.api_key] = user
+            self._user_id_map[user.id] = user
 
     def get_users_count(self) -> int:
         return len(self._user_map)
@@ -226,8 +209,6 @@ class GameManager():
 class Users(Resource):
     '''Handles the /users endpoint'''
 
-    VALID_USERNAME_REGEX = regex.compile('[a-z]+[a-zA-Z0-9]+')
-
     def __init__(self, user_manager: UserManager):
         self._user_manager = user_manager
 
@@ -237,32 +218,6 @@ class Users(Resource):
 
         # IMPORTANT: We shouldn't leak the users API key after creation.
         return user.to_json(include_api_key=False)
-
-    def put(self, username: str) -> UserModelApiResponse:
-        '''Creates a new user if one doesn't already exist'''
-        # TODO(j0n3lson) Block registration when game is started. We'll need to
-        # remove the direct dependency on UserManager here and instead creates
-        # users via GameManager.
-        self._validate_username_or_abort(username)
-        user = self._user_manager.add_user(username)
-
-        # IMPORTANT: It is okay to tell a user their API key once we created it.
-        return user.to_json(include_api_key=True)
-
-    @classmethod
-    def _validate_username_or_abort(cls, username: str):
-        if not username:
-            flask_restful.abort(HTTPStatus.BAD_REQUEST,
-                                'Username cannot be empty')
-
-        if username == ADMIN_USERNAME:
-            flask_restful.abort(HTTPStatus.FORBIDDEN,
-                                message=f'You cannot register the \"{ADMIN_USERNAME}\" username')
-
-        is_valid = regex.fullmatch(cls.VALID_USERNAME_REGEX, username) != None
-        if (not is_valid):
-            flask_restful.abort(HTTPStatus.BAD_REQUEST,
-                                message=f'Username \"{username}\" is invalid.')
 
 
 class Whisper(Resource):
@@ -319,25 +274,25 @@ class Whisper(Resource):
         current_state = self._game_manager.get_game_status()
         if current_state == GameStatus.GAME_FINISHED:
             flask_restful.abort(
-                HTTPStatus.FORBIDDEN, f'State: {current_state}. Game has finished. You should start listening for the next game to start.')
+                HTTPStatus.FORBIDDEN, message=f'State: {current_state}. Game has finished. You should start listening for the next game to start.')
 
         # Are there enough players?
         player_count = self._game_manager.get_player_count()
         if player_count < 3:
             flask_restful.abort(
-                HTTPStatus.FORBIDDEN, f'There are not enough players. Need 3, have {player_count} players registered.')
+                HTTPStatus.FORBIDDEN, message= f'There are not enough players. Need 3, have {player_count} players registered.')
 
     def _get_players_or_abort(self, from_username, to_username) -> Tuple[UserModel, UserModel]:
         '''Checks that the user can whisper to the other user or aborts.'''
         from_user = self._game_manager.get_player_by_name(from_username)
         if from_user.id != self._game_manager.get_current_player_id():
             flask_restful.abort(HTTPStatus.FORBIDDEN,
-                                f'Sorry, {from_username}, it is not your turn!')
+                                message = f'Sorry, {from_username}, it is not your turn!')
 
         to_user = self._game_manager.get_player_by_name(to_username)
         if to_user.id != self._game_manager.get_next_player_id():
             flask_restful.abort(HTTPStatus.FORBIDDEN,
-                                f'Sorry, {to_username} is not next!')
+                                message=f'Sorry, {to_username} is not next!')
 
         return from_user, to_user
 
@@ -392,10 +347,10 @@ class Listen(Resource):
         return parser.parse_args(strict=True)
 
 
-def create_app():
+def create_app(users: List[UserModel]):
     # Game depdendencies
 
-    user_manager = UserManager()
+    user_manager = UserManager(users)
     game_manager = GameManager(user_manager)
 
     # Init app
@@ -412,8 +367,3 @@ def create_app():
     api.add_resource(Whisper, '/play/whisper/<string:to_username>',
                      resource_class_kwargs={'game_manager': game_manager})
     return app
-
-
-if __name__ == '__main__':
-    app = create_app()
-    app.run(debug=True)
