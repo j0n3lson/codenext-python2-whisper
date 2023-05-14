@@ -6,7 +6,7 @@
       "type": "python",
       "request": "launch",
       "module": "flask",
-      "env": { "FLASK_APP": "server/api.py", "FLASK_DEBUG": "1" },
+      "env": { "FLASK_APP": "server/main.py", "FLASK_DEBUG": "1" },
       "args": ["run", "--no-debugger", "--no-reload"],
       "justMyCode": true
     },

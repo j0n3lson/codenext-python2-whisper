@@ -56,7 +56,7 @@ workspace in a container.
 
 Launch your workspace in the container. Once inside, run the server like this:
 
-    python server/api.py
+    python server/main.py
 
 You can use the REST end points using the `curl` utility:
 
@@ -79,10 +79,6 @@ Change into the directory and run, to run all test:
 The service has the following APIs implemented:
 
 ## Open to all
-
-- `/users/register/{username}`: Registers the given `{username}`. This should be
-  the first thing a client calls. When called, this API registers a user and
-  returns a unique API key. The API key is associated with the user's ID.
 
 - `/play/listen/{api_key}`: `API KEY REQUIRED`. Let's a user check for a message.
   Clients should continuously check to after they have registered.
