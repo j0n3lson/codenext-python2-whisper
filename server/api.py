@@ -4,8 +4,12 @@ import flask_restful
 import json
 import random
 import string
+import logging
+import time
 
+from pygtail import Pygtail
 from enum import Enum
+from flask import Response
 from flask_restful import reqparse, Resource
 from http import HTTPStatus
 from marshmallow import fields, post_load, Schema, validate
@@ -251,6 +255,10 @@ class Whisper(Resource):
         # Whisper: Add a Whisper {message, from_user, to_user} to the model
         self._game_manager.set_message_for_user(
             from_user.username, to_user.username, message)
+        
+        # Log whisper
+        AdminLogging.log_whisper(AdminLogging, to_user.username, from_user.username, message)
+
         self._game_manager.set_current_player_id(from_user.id+1)
         self._game_manager.set_next_player_id(to_user.id+1)
 
@@ -345,6 +353,30 @@ class Listen(Resource):
         parser.add_argument('api_key', type=str,
                             help='The api key for the user')
         return parser.parse_args(strict=True)
+
+class AdminLogging(Resource):
+    # Create logging file
+    def get_whisper_logger(self) -> logging.Logger:
+        logging.basicConfig(
+            filename="Whisper_Logger.log"
+            )
+        return logging.getLogger("Whisper_Logger")
+    
+    # Log whisper
+    def log_whisper(self, to: str, fr: str, msg: str):
+        logging.Logger = logging.Logger(self.get_whisper_logger())
+        logString = fr + " to " + to + ": " + msg
+        logging.info(logString)
+    
+    # Stream log
+    def stream_log(self):
+        def generate():
+            for line in Pygtail("Whisper_Logger.log", every_n=1):
+                yield str(line)
+                ''' Might be necessary if this times out or crashes the system. '''
+                #time.sleep(0.1)
+        return Response(generate(), mimetype= 'text/event-stream')
+
 
 
 def create_app(users: List[UserModel]):

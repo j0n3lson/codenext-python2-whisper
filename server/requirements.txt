@@ -21,3 +21,4 @@ six==1.15.0
 tomli==2.0.1
 urllib3==1.26.15
 Werkzeug==1.0.1
+pygtail==0.14.0
