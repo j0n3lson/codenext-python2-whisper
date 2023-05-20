@@ -1,12 +1,13 @@
 '''Read in config.'''
 
-import api
-from typing import List
 from marshmallow.exceptions import ValidationError
+from typing import List
+
+import api
+
 
 class InvalidConfigError(Exception):
     '''When configuration is invalid.'''
-    pass
 
 
 def read_user_config(file_path: str) -> List[api.UserModel]:

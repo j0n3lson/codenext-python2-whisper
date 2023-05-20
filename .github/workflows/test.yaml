@@ -34,4 +34,4 @@ jobs:
         run: python -m pip install -r server/requirements.txt
         # Runs all tests
       - name: Run tests
-        run: python -m unittest server/tests/test*
+        run: python -m unittest
