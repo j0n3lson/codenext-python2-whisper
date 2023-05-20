@@ -1,7 +1,4 @@
 {
-    "[python]": {
-        "editor.defaultFormatter": "ms-python.python"
-    },
     "python.formatting.provider": "autopep8",
     "python.testing.unittestEnabled": true,
     "python.testing.unittestArgs": [
