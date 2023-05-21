@@ -9,4 +9,4 @@ WORKDIR /
 
 COPY ./ /deploy
 
-RUN pip install --no-cache-dir --upgrade -r /deploy/requirements.txt
+RUN pip3 install --no-cache-dir --upgrade -r /deploy/requirements.txt
