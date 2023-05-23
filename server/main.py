@@ -1,10 +1,11 @@
-import api
-import config
-import logging
-import os
 
 from absl import app
 from absl import flags
+import logging
+import os
+
+import api
+import config
 
 FLAGS = flags.FLAGS
 

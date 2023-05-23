@@ -5,8 +5,8 @@ RUN apt update && \
     vim && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /server
+WORKDIR /
 
-COPY ./server /deploy/server
+COPY ./ /deploy
 
-RUN pip install --no-cache-dir --upgrade -r /deploy/server/requirements.txt
+RUN pip install --no-cache-dir --upgrade -r /deploy/requirements.txt

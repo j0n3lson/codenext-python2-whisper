@@ -1,4 +1,3 @@
-import datetime
 import flask
 import flask_restful
 import json
@@ -389,7 +388,7 @@ def create_app(users: List[UserModel]):
     game_manager = GameManager(user_manager)
 
     # Init app
-    app = flask.Flask(__name__)
+    app = flask.Flask('whisper_server')
     api = flask_restful.Api(app)
 
     # Setup routes

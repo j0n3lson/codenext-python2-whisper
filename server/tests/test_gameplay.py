@@ -1,6 +1,5 @@
 '''API test for for playing the game.'''
 
-import os
 import datetime
 import json
 
@@ -8,9 +7,10 @@ from absl.testing import absltest
 mock = absltest.mock
 
 from http import HTTPStatus
-from server import api
-from server import config
 from typing import Dict
+
+from .context import server
+from server import api
 
 TEST_USER_CONFIG = r'''
 [
@@ -135,3 +135,7 @@ class GamePlayApiTest(absltest.TestCase):
         self.assertEqual(HTTPStatus.OK, response.status_code)
         data = json.loads(response.data)
         return data
+
+
+if __name__ == '__main__':
+    absltest.main()

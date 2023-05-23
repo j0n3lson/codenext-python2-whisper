@@ -4,10 +4,13 @@ import json
 
 from absl.testing import absltest
 from absl.testing import parameterized
-from server import api
-from server import config
 from six import PY2
 from typing import Union
+
+from .context import server
+from server import api
+from server import config
+
 
 mock = absltest.mock
 
@@ -59,7 +62,6 @@ class UserConfigTest(parameterized.TestCase):
 
         self.assertRaises(config.InvalidConfigError,
                           config.read_user_config, file_path='unused_file_path')
-        pass
 
     def setup_mock_open(self, data):
         '''Setup mock open() with the given data and return the created mock.'''
@@ -78,3 +80,6 @@ def make_test_user(id: Union[str, None], username: str, api_key: str, user_type:
     if user_type:
         data['type'] = user_type
     return data
+
+if __name__ == '__main__':
+    absltest.main()
