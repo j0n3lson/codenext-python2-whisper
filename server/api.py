@@ -375,7 +375,10 @@ class AdminLogging(Resource):
                 yield str(line)
                 ''' Might be necessary if this times out or crashes the system. '''
                 #time.sleep(0.1)
-        return Response(generate(), mimetype= 'text/event-stream')
+        return Response(self.generate(), mimetype= 'text/event-stream')
+    
+    def get(self):
+        return {'logs': self.stream_log()}, 200
 
 
 
@@ -397,5 +400,7 @@ def create_app(users: List[UserModel]):
     api.add_resource(Listen, '/play/listen/<string:username>',
                      resource_class_kwargs={'game_manager': game_manager})
     api.add_resource(Whisper, '/play/whisper/<string:to_username>',
+                     resource_class_kwargs={'game_manager': game_manager})
+    api.add_resource(AdminLogging, '/play/Logging',
                      resource_class_kwargs={'game_manager': game_manager})
     return app
