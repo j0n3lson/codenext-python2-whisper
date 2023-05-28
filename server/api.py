@@ -1,8 +1,14 @@
 import flask
 import flask_restful
 import json
+import random
+import string
+import logging
+import time
 
+from pygtail import Pygtail
 from enum import Enum
+from flask import Response
 from flask_restful import reqparse, Resource
 from http import HTTPStatus
 from marshmallow import fields, post_load, Schema, validate
@@ -248,6 +254,11 @@ class Whisper(Resource):
         # Whisper: Add a Whisper {message, from_user, to_user} to the model
         self._game_manager.set_message_for_user(
             from_user.username, to_user.username, message)
+        
+        # Log whisper
+        logString = from_username + " to " + to_username + ": " + message
+        logging.getLogger("whispher_server").info(logString)
+
         self._game_manager.set_current_player_id(from_user.id+1)
         self._game_manager.set_next_player_id(to_user.id+1)
 
@@ -342,6 +353,19 @@ class Listen(Resource):
         parser.add_argument('api_key', type=str,
                             help='The api key for the user')
         return parser.parse_args(strict=True)
+
+class AdminLogging(Resource):
+
+    # Stream log
+    def stream_log(self):
+        for line in Pygtail(logging.getLogger("whispher_server"), every_n=1):
+            yield str(line)
+            #time.sleep(0.1) 
+            # ''' Might be necessary if this times out or crashes the system. '''
+    
+    def get(self):
+        return Response(self.stream_log(), mimetype= 'text/event-stream')
+
 
 
 def create_app(users: List[UserModel]):
